@@ -61,11 +61,11 @@ export const driveClient = new Proxy({} as drive_v3.Drive, {
 });
 
 export function getOAuth2Client(redirectUri?: string) {
-  const env = getEnv();
-  const clientId = env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || "";
-  const clientSecret = env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || "";
+  const clientId = process.env.GOOGLE_CLIENT_ID || "";
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
   const callbackUrl =
-    redirectUri || `${env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/auth/google/callback`;
+    redirectUri ||
+    `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/auth/google/callback`;
 
   return new google.auth.OAuth2(clientId, clientSecret, callbackUrl);
 }

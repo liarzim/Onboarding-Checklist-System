@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 import { verifyGoogleOAuthCode } from "@/lib/google";
 import { signAdminToken, setAdminAuthCookie } from "@/lib/auth";
-import { isAuthorizedAdminEmail } from "@/lib/security";
+import { getAuthorizedUser } from "@/lib/security";
 import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
-import { getEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/auth/google/callback
  * Google redirects here after user signs in.
- * Validates OAuth code, retrieves Google profile, checks admin authorization,
+ * Validates OAuth code, retrieves Google profile, checks user authorization,
  * issues admin session cookie, and logs to Audit_Log.
  */
 export async function GET(request: Request) {
@@ -27,34 +26,45 @@ export async function GET(request: Request) {
     loginUrl.searchParams.set(
       "error",
       error === "access_denied"
-        ? "ההתחברות באמצעות חשבון Google בוטלה על ידי המשתמש"
-        : "שגיאה בתהליך ההתחברות מול Google"
+        ? "ההתחברות באמצעות חשבון Google בוטלה או שהמשתמש אינו מוגדר כמשתמש בדיקה (Test User) ב-Google Console"
+        : `שגיאה בתהליך ההתחברות מול Google: ${error || "חסר קוד אימות"}`
     );
     return NextResponse.redirect(loginUrl);
   }
 
   try {
-    // 1. Verify code and fetch user profile from Google using the matching redirectUri
+    // 1. Verify code and fetch user profile from Google using matching redirectUri
     const profile = await verifyGoogleOAuthCode(code, redirectUri);
     const email = profile.email.toLowerCase().trim();
 
-    // 2. Check if user is an authorized Admin or HR
-    const isAdmin = await isAuthorizedAdminEmail(email);
+    // 2. Check authorization status in Admins sheet or environment list
+    const authCheck = await getAuthorizedUser(email);
+    if (!authCheck.authorized) {
+      const loginUrl = new URL("/admin/login", baseUrl);
+      loginUrl.searchParams.set(
+        "error",
+        `כתובת האימייל (${email}) אינה מורשית במערכת. יש לפנות למנהל המערכת להוספת הרשאה.`
+      );
+      return NextResponse.redirect(loginUrl);
+    }
 
-    // If not authorized as Admin, role defaults to HR unless strictly restricted
-    const role: "Admin" | "HR" = isAdmin ? "Admin" : "HR";
+    const role: "Admin" | "HR" = authCheck.role;
+    const userDisplayName =
+      authCheck.full_name ||
+      profile.name ||
+      (role === "Admin" ? "מנהל מערכת" : "נציגת משאבי אנוש");
 
     // 3. Issue signed admin JWT token
     const token = await signAdminToken({
       user_id: `user_google_${email.replace(/[^a-zA-Z0-9]/g, "_")}`,
-      full_name: profile.name || (isAdmin ? "מנהל מערכת" : "נציגת משאבי אנוש"),
+      full_name: userDisplayName,
       email,
       role,
     });
 
     setAdminAuthCookie(token);
 
-    // 4. Log sign-in to AuditLog
+    // 4. Log sign-in to AuditLog (fail-safe)
     try {
       await sheetsRepository.appendAuditLog({
         log_id: `log_auth_${Date.now()}`,
@@ -64,7 +74,7 @@ export async function GET(request: Request) {
         action_type: "LOGIN_GOOGLE_OAUTH",
         entity_type: "ADMIN_AUTH",
         entity_id: email,
-        details: `התחברות מוצלחת באמצעות Google OAuth בתפקיד ${role} (${profile.name})`,
+        details: `התחברות מוצלחת באמצעות Google OAuth בתפקיד ${role} (${userDisplayName})`,
       });
     } catch {
       // Don't block login if audit logging fails
@@ -75,7 +85,8 @@ export async function GET(request: Request) {
   } catch (err: any) {
     console.error("Google OAuth callback error:", err);
     const loginUrl = new URL("/admin/login", baseUrl);
-    loginUrl.searchParams.set("error", "אימות חשבון Google נכשל או שפג תוקף הקוד");
+    const errMsg = err?.message || "פג תוקף הקוד או בעיית אימות";
+    loginUrl.searchParams.set("error", `אימות חשבון Google נכשל: ${errMsg}`);
     return NextResponse.redirect(loginUrl);
   }
 }

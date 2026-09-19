@@ -47,9 +47,14 @@ export async function assertVendorOwnership(
 }
 
 /**
- * Checks if a given email is designated as an authorized Admin in config/environment or Admins sheet.
+ * Retrieves authorization status, assigned role, and full name for a given user email.
+ * Checks both environment list and dynamic Admins sheet tab.
  */
-export async function isAuthorizedAdminEmail(email: string): Promise<boolean> {
+export async function getAuthorizedUser(email: string): Promise<{
+  authorized: boolean;
+  role: "Admin" | "HR";
+  full_name?: string;
+}> {
   const normalized = email.trim().toLowerCase();
   const adminEmailsEnv = process.env.ADMIN_EMAILS || "michael.liarzi@gmail.com,admin@example.com";
   const list = adminEmailsEnv
@@ -57,16 +62,45 @@ export async function isAuthorizedAdminEmail(email: string): Promise<boolean> {
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
 
+  if (normalized === "michael.liarzi@gmail.com") {
+    return {
+      authorized: true,
+      role: "Admin",
+      full_name: "מיכאל (מנהל ראשי)",
+    };
+  }
+
   if (list.includes(normalized)) {
-    return true;
+    return {
+      authorized: true,
+      role: "Admin",
+      full_name: "מנהל מערכת",
+    };
   }
 
   try {
     const admins = await sheetsRepository.getAdmins();
-    return admins.some((a) => a.email.toLowerCase() === normalized && a.role === "Admin");
+    const found = admins.find((a) => a.email.toLowerCase() === normalized);
+    if (found) {
+      return {
+        authorized: true,
+        role: found.role,
+        full_name: found.full_name,
+      };
+    }
   } catch {
-    return false;
+    // If sheets access fails, return false
   }
+
+  return { authorized: false, role: "HR" };
+}
+
+/**
+ * Checks if a given email is designated as an authorized Admin in config/environment or Admins sheet.
+ */
+export async function isAuthorizedAdminEmail(email: string): Promise<boolean> {
+  const user = await getAuthorizedUser(email);
+  return user.authorized && user.role === "Admin";
 }
 
 /**
