@@ -1,0 +1,743 @@
+import { getSheetsClient } from "../google";
+import { getEnv } from "../env";
+import type {
+  Candidate,
+  ChecklistItem,
+  DocumentType,
+  Vendor,
+  SettingStage,
+  AuditLogEntry,
+} from "@/types/schema";
+import { sanitizeSheetCellValue } from "../security";
+
+export const SHEET_NAMES = {
+  CANDIDATES: "Candidates",
+  CHECKLIST_ITEMS: "ChecklistItems",
+  DOCUMENT_TYPES: "DocumentTypes",
+  AUDIT_LOGS: "AuditLogs",
+  VENDORS: "Vendors",
+  SETTING_STAGES: "SettingStages",
+  PROJECTS: "Projects",
+} as const;
+
+export const DEFAULT_REQUIRED_DOCUMENTS: Omit<DocumentType, "template_drive_url">[] = [
+  { doc_type_id: "doc_1", doc_name: "שאלון אישי רמה 5", is_required: true, order_index: 1 },
+  { doc_type_id: "doc_2", doc_name: "עלון מידע לנבדק", is_required: true, order_index: 2 },
+  { doc_type_id: "doc_3", doc_name: "הצהרה על קבלת כרטיס חכם", is_required: true, order_index: 3 },
+  { doc_type_id: "doc_4", doc_name: "הסכמה למסירת מידע פלילי", is_required: true, order_index: 4 },
+  { doc_type_id: "doc_5", doc_name: "התחייבות לשמירת סודיות", is_required: true, order_index: 5 },
+  { doc_type_id: "doc_6", doc_name: "התחייבות לשמירת פרטיות", is_required: true, order_index: 6 },
+  { doc_type_id: "doc_7", doc_name: "הימנעות מעבירות מחשב", is_required: true, order_index: 7 },
+  { doc_type_id: "doc_8", doc_name: "הסכמה לניטור סייבר", is_required: true, order_index: 8 },
+  { doc_type_id: "doc_9", doc_name: "בקשה להנפקת כרטיס חכם", is_required: true, order_index: 9 },
+];
+
+export const DEFAULT_SETTING_STAGES: SettingStage[] = [
+  { stage_id: "stage_1", stage_name: "איסוף מסמכים ראשוני", stage_order: 1, is_terminal: false },
+  { stage_id: "stage_2", stage_name: "בדיקת ביטחון שדה", stage_order: 2, is_terminal: false },
+  { stage_id: "stage_3", stage_name: "אימות מסמכים ומשאבי אנוש", stage_order: 3, is_terminal: false },
+  { stage_id: "stage_4", stage_name: "מוכן להנפקת כרטיס חכם", stage_order: 4, is_terminal: false },
+  { stage_id: "stage_completed", stage_name: "הושלם והונפק כרטיס", stage_order: 5, is_terminal: true },
+];
+
+export interface ICandidatesFilter {
+  vendor_id?: string;
+  is_completed?: boolean;
+}
+
+export class SheetsRepository {
+  private getSpreadsheetId(): string {
+    return getEnv().GOOGLE_SPREADSHEET_ID;
+  }
+
+  /**
+   * Fetches candidate list with optional filtering by vendor_id and is_completed status.
+   */
+  async getCandidates(filter?: ICandidatesFilter): Promise<Candidate[]> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SHEET_NAMES.CANDIDATES}!A2:L`,
+    });
+
+    const rows = response.data.values || [];
+
+    const candidates: Candidate[] = rows.map((row) => ({
+      candidate_id: String(row[0] || ""),
+      full_name: String(row[1] || ""),
+      id_number: String(row[2] || ""),
+      email: String(row[3] || ""),
+      phone: String(row[4] || ""),
+      vendor_id: String(row[5] || ""),
+      project_id: String(row[6] || ""),
+      drive_folder_id: String(row[7] || ""),
+      current_stage_id: String(row[8] || "stage_1"),
+      is_completed: String(row[9] ?? "").toUpperCase() === "TRUE",
+      created_at: String(row[10] || new Date().toISOString()),
+      updated_at: String(row[11] || new Date().toISOString()),
+    }));
+
+    return candidates.filter((c) => {
+      if (filter?.vendor_id !== undefined && c.vendor_id !== filter.vendor_id) {
+        return false;
+      }
+      if (filter?.is_completed !== undefined && c.is_completed !== filter.is_completed) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  /**
+   * Retrieves a candidate by unique candidate_id.
+   */
+  async getCandidateById(candidate_id: string): Promise<Candidate | null> {
+    const candidates = await this.getCandidates();
+    return candidates.find((c) => c.candidate_id === candidate_id) || null;
+  }
+
+  /**
+   * Creates a new candidate row in the Candidates sheet.
+   */
+  async createCandidate(candidate: Candidate): Promise<void> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    const row = [
+      sanitizeSheetCellValue(candidate.candidate_id),
+      sanitizeSheetCellValue(candidate.full_name),
+      sanitizeSheetCellValue(candidate.id_number),
+      sanitizeSheetCellValue(candidate.email),
+      sanitizeSheetCellValue(candidate.phone),
+      sanitizeSheetCellValue(candidate.vendor_id),
+      sanitizeSheetCellValue(candidate.project_id),
+      sanitizeSheetCellValue(candidate.drive_folder_id),
+      sanitizeSheetCellValue(candidate.current_stage_id),
+      candidate.is_completed ? "TRUE" : "FALSE",
+      candidate.created_at,
+      candidate.updated_at,
+    ];
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: `${SHEET_NAMES.CANDIDATES}!A:L`,
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: {
+        values: [row],
+      },
+    });
+  }
+
+  /**
+   * Updates candidate stage in Candidates sheet.
+   */
+  async updateCandidateStage(candidate_id: string, stage_id: string): Promise<void> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SHEET_NAMES.CANDIDATES}!A2:L`,
+    });
+
+    const rows = response.data.values || [];
+    const rowIndex = rows.findIndex((row) => String(row[0] || "") === candidate_id);
+
+    if (rowIndex < 0) {
+      throw new Error(`Candidate with ID "${candidate_id}" was not found in Candidates sheet`);
+    }
+
+    const sheetRowNumber = rowIndex + 2;
+    const now = new Date().toISOString();
+
+    // Update current_stage_id (Col I) and updated_at (Col L)
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${SHEET_NAMES.CANDIDATES}!I${sheetRowNumber}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [[stage_id]],
+      },
+    });
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${SHEET_NAMES.CANDIDATES}!L${sheetRowNumber}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [[now]],
+      },
+    });
+  }
+
+  /**
+   * Sets is_completed to true and updates stage to stage_completed.
+   */
+  async completeCandidate(candidate_id: string): Promise<void> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SHEET_NAMES.CANDIDATES}!A2:L`,
+    });
+
+    const rows = response.data.values || [];
+    const rowIndex = rows.findIndex((row) => String(row[0] || "") === candidate_id);
+
+    if (rowIndex < 0) {
+      throw new Error(`Candidate with ID "${candidate_id}" was not found in Candidates sheet`);
+    }
+
+    const sheetRowNumber = rowIndex + 2;
+    const now = new Date().toISOString();
+
+    // Update current_stage_id, is_completed, updated_at
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${SHEET_NAMES.CANDIDATES}!I${sheetRowNumber}:L${sheetRowNumber}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [["stage_completed", "TRUE", rows[rowIndex][10] || now, now]],
+      },
+    });
+  }
+
+  /**
+   * Retrieves workflow stages from SettingStages tab or defaults.
+   */
+  async getSettingStages(): Promise<SettingStage[]> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    try {
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.SETTING_STAGES}!A2:D`,
+      });
+
+      const rows = response.data.values || [];
+      if (rows.length === 0) {
+        return DEFAULT_SETTING_STAGES;
+      }
+
+      return rows.map((row) => ({
+        stage_id: String(row[0] || ""),
+        stage_name: String(row[1] || ""),
+        stage_order: Number(row[2] || 0),
+        is_terminal: String(row[3] ?? "").toUpperCase() === "TRUE",
+      }));
+    } catch {
+      return DEFAULT_SETTING_STAGES;
+    }
+  }
+
+  /**
+   * Retrieves document types from DocumentTypes sheet, falling back to default required documents.
+   */
+  async getDocumentTypes(): Promise<DocumentType[]> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    try {
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.DOCUMENT_TYPES}!A2:E`,
+      });
+
+      const rows = response.data.values || [];
+      if (rows.length === 0) {
+        return DEFAULT_REQUIRED_DOCUMENTS.map((doc) => ({
+          ...doc,
+          template_drive_url: null,
+        }));
+      }
+
+      return rows.map((row) => ({
+        doc_type_id: String(row[0] || ""),
+        doc_name: String(row[1] || ""),
+        is_required: String(row[2] ?? "").toUpperCase() === "TRUE",
+        template_drive_url: row[3] ? String(row[3]) : null,
+        order_index: Number(row[4] || 0),
+      }));
+    } catch {
+      return DEFAULT_REQUIRED_DOCUMENTS.map((doc) => ({
+        ...doc,
+        template_drive_url: null,
+      }));
+    }
+  }
+
+  /**
+   * Retrieves checklist items for a specific candidate.
+   */
+  async getChecklist(candidate_id: string): Promise<ChecklistItem[]> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A2:H`,
+    });
+
+    const rows = response.data.values || [];
+
+    const items: ChecklistItem[] = rows
+      .filter((row) => String(row[1] || "") === candidate_id)
+      .map((row) => ({
+        checklist_item_id: String(row[0] || ""),
+        candidate_id: String(row[1] || ""),
+        doc_type_id: String(row[2] || ""),
+        status: String(row[3] || "Not_Uploaded"),
+        file_name: row[4] ? String(row[4]) : null,
+        file_drive_id: row[5] ? String(row[5]) : null,
+        file_drive_url: row[6] ? String(row[6]) : null,
+        updated_at: String(row[7] || new Date().toISOString()),
+      }));
+
+    return items;
+  }
+
+  /**
+   * Initializes default checklist items for a candidate with status 'Not_Uploaded'.
+   */
+  async initChecklist(
+    candidate_id: string,
+    docTypes: DocumentType[] = DEFAULT_REQUIRED_DOCUMENTS.map((d) => ({ ...d, template_drive_url: null }))
+  ): Promise<void> {
+    if (!docTypes || docTypes.length === 0) {
+      return;
+    }
+
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+    const now = new Date().toISOString();
+
+    const rows = docTypes.map((docType, index) => [
+      `${candidate_id}_${docType.doc_type_id || index + 1}`,
+      candidate_id,
+      docType.doc_type_id,
+      "Not_Uploaded",
+      "",
+      "",
+      "",
+      now,
+    ]);
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A:H`,
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: {
+        values: rows,
+      },
+    });
+  }
+
+  /**
+   * Updates an existing checklist item for a candidate and doc type.
+   */
+  async updateChecklistItem(
+    candidate_id: string,
+    doc_type_id: string,
+    update: {
+      status: string;
+      file_name?: string | null;
+      file_drive_id?: string | null;
+      file_drive_url?: string | null;
+    }
+  ): Promise<void> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A2:H`,
+    });
+
+    const rows = response.data.values || [];
+    const rowIndex = rows.findIndex(
+      (row) => String(row[1] || "") === candidate_id && String(row[2] || "") === doc_type_id
+    );
+
+    const now = new Date().toISOString();
+
+    if (rowIndex >= 0) {
+      const sheetRowNumber = rowIndex + 2;
+      const currentRow = rows[rowIndex];
+
+      const updatedRow = [
+        currentRow[0] || `${candidate_id}_${doc_type_id}`,
+        candidate_id,
+        doc_type_id,
+        update.status,
+        update.file_name ?? currentRow[4] ?? "",
+        update.file_drive_id ?? currentRow[5] ?? "",
+        update.file_drive_url ?? currentRow[6] ?? "",
+        now,
+      ];
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A${sheetRowNumber}:H${sheetRowNumber}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [updatedRow],
+        },
+      });
+    } else {
+      const newRow = [
+        `${candidate_id}_${doc_type_id}`,
+        candidate_id,
+        doc_type_id,
+        update.status,
+        update.file_name || "",
+        update.file_drive_id || "",
+        update.file_drive_url || "",
+        now,
+      ];
+
+      await sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A:H`,
+        valueInputOption: "USER_ENTERED",
+        insertDataOption: "INSERT_ROWS",
+        requestBody: {
+          values: [newRow],
+        },
+      });
+    }
+  }
+
+  /**
+   * Retrieves a vendor by contact email.
+   */
+  async getVendorByEmail(email: string): Promise<Vendor | null> {
+    const vendors = await this.getVendors();
+    const normalized = email.trim().toLowerCase();
+    return vendors.find((v) => v.contact_email.trim().toLowerCase() === normalized) || null;
+  }
+
+  /**
+   * Retrieves a vendor by vendor_id.
+   */
+  async getVendorById(vendor_id: string): Promise<Vendor | null> {
+    const vendors = await this.getVendors();
+    return vendors.find((v) => v.vendor_id === vendor_id) || null;
+  }
+
+  /**
+   * Fetches all vendors from the Vendors sheet.
+   */
+  async getVendors(): Promise<Vendor[]> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    try {
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.VENDORS}!A2:E`,
+      });
+
+      const rows = response.data.values || [];
+      return rows.map((row) => ({
+        vendor_id: String(row[0] || ""),
+        company_name: String(row[1] || ""),
+        contact_name: String(row[2] || ""),
+        contact_email: String(row[3] || ""),
+        is_active: String(row[4] ?? "").toUpperCase() !== "FALSE",
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Appends an entry to the AuditLogs sheet.
+   */
+  async appendAuditLog(entry: AuditLogEntry): Promise<void> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    const row = [
+      sanitizeSheetCellValue(entry.log_id),
+      sanitizeSheetCellValue(entry.timestamp),
+      sanitizeSheetCellValue(entry.actor_email),
+      sanitizeSheetCellValue(entry.actor_role),
+      sanitizeSheetCellValue(entry.action_type),
+      sanitizeSheetCellValue(entry.entity_type),
+      sanitizeSheetCellValue(entry.entity_id),
+      sanitizeSheetCellValue(entry.details),
+    ];
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: `${SHEET_NAMES.AUDIT_LOGS}!A:H`,
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: {
+        values: [row],
+      },
+    });
+  }
+
+  /**
+   * Retrieves audit log records with optional filtering, sorted newest first.
+   */
+  async getAuditLogs(filter?: {
+    dateFrom?: string;
+    dateTo?: string;
+    actionType?: string;
+    actorEmail?: string;
+  }): Promise<AuditLogEntry[]> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    try {
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.AUDIT_LOGS}!A2:H`,
+      });
+
+      const rows = response.data.values || [];
+
+      const entries: AuditLogEntry[] = rows.map((row) => ({
+        log_id: String(row[0] || ""),
+        timestamp: String(row[1] || new Date().toISOString()),
+        actor_email: String(row[2] || ""),
+        actor_role: String(row[3] || ""),
+        action_type: String(row[4] || ""),
+        entity_type: String(row[5] || ""),
+        entity_id: String(row[6] || ""),
+        details: String(row[7] || ""),
+      }));
+
+      // Filter entries
+      const filtered = entries.filter((entry) => {
+        if (filter?.actionType && entry.action_type !== filter.actionType) {
+          return false;
+        }
+
+        if (
+          filter?.actorEmail &&
+          !entry.actor_email.toLowerCase().includes(filter.actorEmail.toLowerCase())
+        ) {
+          return false;
+        }
+
+        if (filter?.dateFrom) {
+          const entryTime = new Date(entry.timestamp).getTime();
+          const fromTime = new Date(filter.dateFrom).getTime();
+          if (entryTime < fromTime) return false;
+        }
+
+        if (filter?.dateTo) {
+          const entryTime = new Date(entry.timestamp).getTime();
+          const toTime = new Date(filter.dateTo);
+          toTime.setHours(23, 59, 59, 999);
+          if (entryTime > toTime.getTime()) return false;
+        }
+
+        return true;
+      });
+
+      // Sort newest first
+      return filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Saves updated workflow stages to SettingStages sheet.
+   */
+  async saveSettingStages(stages: SettingStage[]): Promise<void> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    const rows = stages.map((s, idx) => [
+      sanitizeSheetCellValue(s.stage_id),
+      sanitizeSheetCellValue(s.stage_name),
+      idx + 1,
+      s.is_terminal ? "TRUE" : "FALSE",
+    ]);
+
+    try {
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId,
+        range: `${SHEET_NAMES.SETTING_STAGES}!A2:D`,
+      });
+    } catch {
+      // Ignore if clear range error
+    }
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${SHEET_NAMES.SETTING_STAGES}!A2:D${rows.length + 1}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: rows,
+      },
+    });
+  }
+
+  /**
+   * Saves updated document types to DocumentTypes sheet.
+   */
+  async saveDocumentTypes(docTypes: DocumentType[]): Promise<void> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    const rows = docTypes.map((d, idx) => [
+      sanitizeSheetCellValue(d.doc_type_id),
+      sanitizeSheetCellValue(d.doc_name),
+      d.is_required ? "TRUE" : "FALSE",
+      sanitizeSheetCellValue(d.template_drive_url || ""),
+      idx + 1,
+    ]);
+
+    try {
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId,
+        range: `${SHEET_NAMES.DOCUMENT_TYPES}!A2:E`,
+      });
+    } catch {
+      // Ignore if clear range error
+    }
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${SHEET_NAMES.DOCUMENT_TYPES}!A2:E${rows.length + 1}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: rows,
+      },
+    });
+  }
+
+  /**
+   * Creates or updates a vendor in the Vendors sheet.
+   */
+  async saveVendor(vendor: Vendor): Promise<void> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SHEET_NAMES.VENDORS}!A2:E`,
+    });
+
+    const rows = response.data.values || [];
+    const rowIndex = rows.findIndex((row) => String(row[0] || "") === vendor.vendor_id);
+
+    const vendorRow = [
+      sanitizeSheetCellValue(vendor.vendor_id),
+      sanitizeSheetCellValue(vendor.company_name),
+      sanitizeSheetCellValue(vendor.contact_name),
+      sanitizeSheetCellValue(vendor.contact_email),
+      vendor.is_active ? "TRUE" : "FALSE",
+    ];
+
+    if (rowIndex >= 0) {
+      const sheetRowNumber = rowIndex + 2;
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${SHEET_NAMES.VENDORS}!A${sheetRowNumber}:E${sheetRowNumber}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [vendorRow],
+        },
+      });
+    } else {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range: `${SHEET_NAMES.VENDORS}!A:E`,
+        valueInputOption: "USER_ENTERED",
+        insertDataOption: "INSERT_ROWS",
+        requestBody: {
+          values: [vendorRow],
+        },
+      });
+    }
+  }
+
+  /**
+   * Retrieves projects list from Projects sheet tab, falling back to active candidates and defaults.
+   */
+  async getProjects(): Promise<string[]> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    try {
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.PROJECTS}!A2:A`,
+      });
+
+      const rows = response.data.values || [];
+      const sheetProjects = rows.map((r) => String(r[0] || "").trim()).filter(Boolean);
+
+      if (sheetProjects.length > 0) {
+        return Array.from(new Set(sheetProjects));
+      }
+    } catch {
+      // Tab may not exist yet
+    }
+
+    // Fallback: extract distinct projects from candidates
+    const candidates = await this.getCandidates();
+    const candidateProjects = candidates.map((c) => c.project_id.trim()).filter(Boolean);
+
+    const defaultProjects = ["פרויקט אלפא", "פרויקט סייבר", "פרויקט ענן", "פרויקט תשתיות"];
+    return Array.from(new Set([...candidateProjects, ...defaultProjects]));
+  }
+
+  /**
+   * Saves recruitment projects to Projects sheet tab.
+   */
+  async saveProjects(projects: string[]): Promise<void> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    const uniqueProjects = Array.from(new Set(projects.map((p) => p.trim()).filter(Boolean)));
+    const rows = uniqueProjects.map((p) => [sanitizeSheetCellValue(p)]);
+
+    try {
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId,
+        range: `${SHEET_NAMES.PROJECTS}!A2:A`,
+      });
+    } catch {
+      // Ignore if tab does not exist yet
+    }
+
+    if (rows.length > 0) {
+      try {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.PROJECTS}!A2:A${rows.length + 1}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: rows,
+          },
+        });
+      } catch {
+        // If sheet tab is missing, we append
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: `${SHEET_NAMES.PROJECTS}!A:A`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: [["שם פרויקט"], ...rows],
+          },
+        });
+      }
+    }
+  }
+}
+
+export const sheetsRepository = new SheetsRepository();
