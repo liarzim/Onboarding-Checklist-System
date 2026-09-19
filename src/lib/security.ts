@@ -47,6 +47,20 @@ export async function assertVendorOwnership(
 }
 
 /**
+ * Checks if a given email is designated as an authorized Admin in config/environment.
+ */
+export function isAuthorizedAdminEmail(email: string): boolean {
+  const normalized = email.trim().toLowerCase();
+  const adminEmailsEnv = process.env.ADMIN_EMAILS || "michael.liarzi@gmail.com,admin@example.com";
+  const list = adminEmailsEnv
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  return list.includes(normalized);
+}
+
+/**
  * Asserts that the active user session has the 'Admin' role.
  * Throws ForbiddenError if user is unauthenticated or role is not Admin.
  */

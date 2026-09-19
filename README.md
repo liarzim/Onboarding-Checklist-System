@@ -100,6 +100,14 @@ GOOGLE_DRIVE_ROOT_FOLDER_ID="your_google_drive_folder_id_here"
 
 # Security & Sessions
 JWT_SECRET="your_secure_random_string_at_least_32_characters_long"
+
+# Google OAuth2 Authentication (Admin & HR Login)
+GOOGLE_CLIENT_ID="your_google_oauth_client_id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="your_google_oauth_client_secret"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+
+# Authorized Admin Emails (Comma separated list)
+ADMIN_EMAILS="michael.liarzi@gmail.com,admin@example.com"
 ```
 
 > **שים לב**: במידה וה-`GOOGLE_PRIVATE_KEY` מכיל ירידות שורה, שמור אותו בגרשיים כפולים כאשר ירידות השורה מיוצגות כ-`\n`.

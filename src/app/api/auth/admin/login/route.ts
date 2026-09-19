@@ -42,11 +42,21 @@ export async function POST(request: Request) {
       );
     }
 
-    const { email, role, fullName } = parsed.data;
+    const { email, role: requestedRole, fullName } = parsed.data;
+    const { isAuthorizedAdminEmail } = await import("@/lib/security");
+
+    // If the email is a configured admin email, ensure the role is 'Admin'
+    const role = isAuthorizedAdminEmail(email) ? "Admin" : requestedRole;
 
     const token = await signAdminToken({
       user_id: `user_${role.toLowerCase()}_${Date.now()}`,
-      full_name: fullName || (role === "HR" ? "נציגת משאבי אנוש" : "מנהל מערכת"),
+      full_name:
+        fullName ||
+        (role === "Admin"
+          ? email.toLowerCase() === "michael.liarzi@gmail.com"
+            ? "מיכאל (מנהל ראשי)"
+            : "מנהל מערכת"
+          : "נציגת משאבי אנוש"),
       email: email.toLowerCase(),
       role: role as "HR" | "Admin",
     });

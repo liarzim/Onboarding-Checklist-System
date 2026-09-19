@@ -26,6 +26,13 @@ export const envSchema = z.object({
   JWT_SECRET: z
     .string()
     .min(16, "JWT_SECRET must be at least 16 characters long"),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  NEXT_PUBLIC_APP_URL: z.string().optional().default("http://localhost:3000"),
+  ADMIN_EMAILS: z
+    .string()
+    .optional()
+    .default("michael.liarzi@gmail.com,admin@example.com"),
 });
 
 export type Env = z.infer<typeof envSchema>;

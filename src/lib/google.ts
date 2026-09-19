@@ -60,4 +60,41 @@ export const driveClient = new Proxy({} as drive_v3.Drive, {
   },
 });
 
+export function getOAuth2Client(redirectUri?: string) {
+  const env = getEnv();
+  const clientId = env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || "";
+  const clientSecret = env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || "";
+  const callbackUrl =
+    redirectUri || `${env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/auth/google/callback`;
+
+  return new google.auth.OAuth2(clientId, clientSecret, callbackUrl);
+}
+
+export function getGoogleAuthUrl(): string {
+  const oauth2Client = getOAuth2Client();
+  return oauth2Client.generateAuthUrl({
+    access_type: "offline",
+    prompt: "consent",
+    scope: [
+      "https://www.googleapis.com/auth/userinfo.profile",
+      "https://www.googleapis.com/auth/userinfo.email",
+    ],
+  });
+}
+
+export async function verifyGoogleOAuthCode(code: string) {
+  const oauth2Client = getOAuth2Client();
+  const { tokens } = await oauth2Client.getToken(code);
+  oauth2Client.setCredentials(tokens);
+
+  const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
+  const { data } = await oauth2.userinfo.get();
+
+  return {
+    email: data.email || "",
+    name: data.name || "",
+    picture: data.picture || "",
+  };
+}
+
 export type { sheets_v4, drive_v3 };
