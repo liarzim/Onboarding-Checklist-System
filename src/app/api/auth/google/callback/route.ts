@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     const email = profile.email.toLowerCase().trim();
 
     // 2. Check if user is an authorized Admin or HR
-    const isAdmin = isAuthorizedAdminEmail(email);
+    const isAdmin = await isAuthorizedAdminEmail(email);
 
     // If not authorized as Admin, role defaults to HR unless strictly restricted
     const role: "Admin" | "HR" = isAdmin ? "Admin" : "HR";

@@ -80,3 +80,12 @@ export const AuditLogEntrySchema = z.object({
 });
 
 export type AuditLogEntry = z.infer<typeof AuditLogEntrySchema>;
+
+export const AdminUserSchema = z.object({
+  email: z.string().email(),
+  full_name: z.string().min(1),
+  role: z.enum(["Admin", "HR"]).default("Admin"),
+  added_at: z.string().optional(),
+});
+
+export type AdminUser = z.infer<typeof AdminUserSchema>;

@@ -7,6 +7,7 @@ import type {
   Vendor,
   SettingStage,
   AuditLogEntry,
+  AdminUser,
 } from "@/types/schema";
 import { sanitizeSheetCellValue } from "../security";
 
@@ -18,6 +19,7 @@ export const SHEET_NAMES = {
   VENDORS: "Vendors",
   SETTING_STAGES: "SettingStages",
   PROJECTS: "Projects",
+  ADMINS: "Admins",
 } as const;
 
 export const DEFAULT_REQUIRED_DOCUMENTS: Omit<DocumentType, "template_drive_url">[] = [
@@ -736,6 +738,163 @@ export class SheetsRepository {
           },
         });
       }
+    }
+  }
+
+  /**
+   * Retrieves all registered administrators and HR managers.
+   * Merges records from Google Sheets 'Admins' tab with environment default admins.
+   */
+  async getAdmins(): Promise<AdminUser[]> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    const envDefaults: AdminUser[] = [
+      {
+        email: "michael.liarzi@gmail.com",
+        full_name: "מיכאל (מנהל ראשי)",
+        role: "Admin",
+        added_at: "מערכת ראשית",
+      },
+      {
+        email: "admin@example.com",
+        full_name: "מנהל מערכת ראשי",
+        role: "Admin",
+        added_at: "ברירת מחדל",
+      },
+    ];
+
+    try {
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.ADMINS}!A2:D`,
+      });
+
+      const rows = response.data.values || [];
+      const sheetAdmins: AdminUser[] = rows
+        .map((row) => ({
+          email: String(row[0] || "").trim().toLowerCase(),
+          full_name: String(row[1] || "").trim(),
+          role: (String(row[2] || "").trim() === "HR" ? "HR" : "Admin") as "Admin" | "HR",
+          added_at: String(row[3] || "").trim() || new Date().toISOString(),
+        }))
+        .filter((a) => a.email.length > 0);
+
+      // Merge defaults with sheet admins without duplicate emails
+      const emailMap = new Map<string, AdminUser>();
+      for (const def of envDefaults) {
+        emailMap.set(def.email.toLowerCase(), def);
+      }
+      for (const adm of sheetAdmins) {
+        emailMap.set(adm.email.toLowerCase(), adm);
+      }
+
+      return Array.from(emailMap.values());
+    } catch {
+      return envDefaults;
+    }
+  }
+
+  /**
+   * Adds or updates an admin / HR user in the Admins sheet tab.
+   */
+  async saveAdmin(user: AdminUser): Promise<void> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+    const normalizedEmail = user.email.trim().toLowerCase();
+
+    let existingRows: any[][] = [];
+    try {
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.ADMINS}!A2:D`,
+      });
+      existingRows = response.data.values || [];
+    } catch {
+      // Tab might not exist yet
+    }
+
+    const rowIndex = existingRows.findIndex(
+      (row) => String(row[0] || "").trim().toLowerCase() === normalizedEmail
+    );
+
+    const adminRow = [
+      sanitizeSheetCellValue(normalizedEmail),
+      sanitizeSheetCellValue(user.full_name),
+      sanitizeSheetCellValue(user.role),
+      sanitizeSheetCellValue(user.added_at || new Date().toISOString()),
+    ];
+
+    if (rowIndex >= 0) {
+      const sheetRowNumber = rowIndex + 2;
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${SHEET_NAMES.ADMINS}!A${sheetRowNumber}:D${sheetRowNumber}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [adminRow],
+        },
+      });
+    } else {
+      try {
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: `${SHEET_NAMES.ADMINS}!A:D`,
+          valueInputOption: "USER_ENTERED",
+          insertDataOption: "INSERT_ROWS",
+          requestBody: {
+            values: [adminRow],
+          },
+        });
+      } catch {
+        // Create tab with header row
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: `${SHEET_NAMES.ADMINS}!A:D`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: [["אימייל", "שם מלא", "תפקיד", "תאריך הוספה"], adminRow],
+          },
+        });
+      }
+    }
+  }
+
+  /**
+   * Removes an administrator by email from the Admins sheet tab.
+   */
+  async deleteAdmin(email: string): Promise<void> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    try {
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.ADMINS}!A2:D`,
+      });
+      const rows = response.data.values || [];
+      const updatedRows = rows.filter(
+        (row) => String(row[0] || "").trim().toLowerCase() !== normalizedEmail
+      );
+
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId,
+        range: `${SHEET_NAMES.ADMINS}!A2:D`,
+      });
+
+      if (updatedRows.length > 0) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.ADMINS}!A2:D${updatedRows.length + 1}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: updatedRows,
+          },
+        });
+      }
+    } catch {
+      // Ignore if tab does not exist
     }
   }
 }

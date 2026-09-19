@@ -13,11 +13,12 @@ export async function GET() {
   try {
     await assertAdminRole();
 
-    const [stages, documentTypes, vendors, projects] = await Promise.all([
+    const [stages, documentTypes, vendors, projects, admins] = await Promise.all([
       sheetsRepository.getSettingStages(),
       sheetsRepository.getDocumentTypes(),
       sheetsRepository.getVendors(),
       sheetsRepository.getProjects(),
+      sheetsRepository.getAdmins(),
     ]);
 
     return NextResponse.json({
@@ -27,6 +28,7 @@ export async function GET() {
         document_types: documentTypes,
         vendors,
         projects,
+        admins,
       },
     });
   } catch (error: any) {

@@ -16,11 +16,13 @@ import {
   MoveUp,
   MoveDown,
   ExternalLink,
+  ShieldAlert,
+  UserPlus,
 } from "lucide-react";
-import type { SettingStage, DocumentType, Vendor } from "@/types/schema";
+import type { SettingStage, DocumentType, Vendor, AdminUser } from "@/types/schema";
 
 export default function AdminSettingsPage() {
-  const [activeTab, setActiveTab] = useState<"stages" | "documents" | "vendors" | "projects">("stages");
+  const [activeTab, setActiveTab] = useState<"stages" | "documents" | "vendors" | "projects" | "admins">("stages");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -30,6 +32,7 @@ export default function AdminSettingsPage() {
   const [documents, setDocuments] = useState<DocumentType[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [projects, setProjects] = useState<string[]>([]);
+  const [admins, setAdmins] = useState<AdminUser[]>([]);
 
   // Selected or New Vendor modal/row state
   const [vendorForm, setVendorForm] = useState<Vendor>({
@@ -43,6 +46,11 @@ export default function AdminSettingsPage() {
 
   // New Project Input
   const [newProjectName, setNewProjectName] = useState("");
+
+  // New Admin Form State
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [newAdminName, setNewAdminName] = useState("");
+  const [newAdminRole, setNewAdminRole] = useState<"Admin" | "HR">("Admin");
 
   useEffect(() => {
     fetchSettings();
@@ -59,6 +67,7 @@ export default function AdminSettingsPage() {
         setDocuments(json.data.document_types || []);
         setVendors(json.data.vendors || []);
         setProjects(json.data.projects || []);
+        setAdmins(json.data.admins || []);
       } else {
         setMessage({ type: "error", text: json.message || "שגיאה בטעינת נתוני הגדרות" });
       }
@@ -248,6 +257,66 @@ export default function AdminSettingsPage() {
     }
   }
 
+  // --- ADMINS HANDLERS ---
+  async function handleAddAdmin(e: React.FormEvent) {
+    e.preventDefault();
+    const emailTrimmed = newAdminEmail.trim().toLowerCase();
+    const nameTrimmed = newAdminName.trim();
+    if (!emailTrimmed || !nameTrimmed) return;
+
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/settings/admins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: emailTrimmed,
+          full_name: nameTrimmed,
+          role: newAdminRole,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setMessage({ type: "success", text: json.message });
+        setNewAdminEmail("");
+        setNewAdminName("");
+        await fetchSettings();
+      } else {
+        setMessage({ type: "error", text: json.message || "שגיאה בהוספת מנהל" });
+      }
+    } catch {
+      setMessage({ type: "error", text: "שגיאת תקשורת בהוספת מנהל" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteAdmin(email: string) {
+    if (!confirm(`האם אתה בטוח שברצונך להסיר את הרשאת הניהול עבור ${email}?`)) {
+      return;
+    }
+
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/admin/settings/admins?email=${encodeURIComponent(email)}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setMessage({ type: "success", text: json.message });
+        await fetchSettings();
+      } else {
+        setMessage({ type: "error", text: json.message || "שגיאה במחיקת מנהל" });
+      }
+    } catch {
+      setMessage({ type: "error", text: "שגיאת תקשורת במחיקת מנהל" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -340,6 +409,18 @@ export default function AdminSettingsPage() {
         >
           <FolderGit2 className="w-4 h-4" />
           <span>ניהול פרויקטים ({projects.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("admins")}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+            activeTab === "admins"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+          }`}
+        >
+          <ShieldAlert className="w-4 h-4" />
+          <span>מנהלי מערכת ({admins.length})</span>
         </button>
       </div>
 
@@ -822,6 +903,149 @@ export default function AdminSettingsPage() {
                       </button>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 5: ADMINS & HR MANAGERS */}
+            {activeTab === "admins" && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base font-bold text-slate-800">
+                      ניהול מנהלי מערכת ומשאבי אנוש (Admins / HR)
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      הוספה והסרה של חשבונות מורשים לכניסה ישירה באמצעות Google OAuth ופורטל הניהול
+                    </p>
+                  </div>
+                </div>
+
+                {/* Add New Admin Form */}
+                <form
+                  onSubmit={handleAddAdmin}
+                  className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3"
+                >
+                  <h3 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <UserPlus className="w-4 h-4 text-blue-600" />
+                    <span>הוספת מנהל / נציג HR חדש</span>
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        כתובת אימייל (Google / ארגוני)
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={newAdminEmail}
+                        onChange={(e) => setNewAdminEmail(e.target.value)}
+                        placeholder="user@gmail.com"
+                        className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        שם מלא
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newAdminName}
+                        onChange={(e) => setNewAdminName(e.target.value)}
+                        placeholder="ישראל ישראלי"
+                        className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        תפקיד במערכת
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={newAdminRole}
+                          onChange={(e) => setNewAdminRole(e.target.value as "Admin" | "HR")}
+                          className="flex-1 text-xs bg-white border border-slate-300 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-500"
+                        >
+                          <option value="Admin">מנהל מערכת (Admin) - גישה מלאה</option>
+                          <option value="HR">משאבי אנוש (HR) - בקרת מועמדים</option>
+                        </select>
+                        <button
+                          type="submit"
+                          disabled={saving}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition disabled:opacity-50 shrink-0 shadow-sm"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>{saving ? "שומר..." : "הוסף"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </form>
+
+                {/* Admins Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-right text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500 bg-slate-50">
+                        <th className="py-2.5 px-3 font-semibold">שם מלא</th>
+                        <th className="py-2.5 px-3 font-semibold">אימייל (Google Account)</th>
+                        <th className="py-2.5 px-3 font-semibold text-center">תפקיד</th>
+                        <th className="py-2.5 px-3 font-semibold">תאריך צירוף</th>
+                        <th className="py-2.5 px-3 font-semibold text-center">פעולות</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {admins.map((adm) => {
+                        const isPrimary = adm.email.toLowerCase() === "michael.liarzi@gmail.com";
+                        return (
+                          <tr key={adm.email} className="hover:bg-slate-50/70 transition">
+                            <td className="py-2.5 px-3 font-bold text-slate-800">
+                              {adm.full_name}
+                              {isPrimary && (
+                                <span className="mr-2 text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-normal">
+                                  ראשי
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-slate-600">
+                              {adm.email}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <span
+                                className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                                  adm.role === "Admin"
+                                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                                    : "bg-blue-50 text-blue-700 border-blue-200"
+                                }`}
+                              >
+                                {adm.role === "Admin" ? "מנהל מערכת (Admin)" : "משאבי אנוש (HR)"}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-500">
+                              {adm.added_at && !isNaN(Date.parse(adm.added_at))
+                                ? new Date(adm.added_at).toLocaleDateString("he-IL")
+                                : adm.added_at || "-"}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              {isPrimary ? (
+                                <span className="text-[11px] text-slate-400">מוגן</span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAdmin(adm.email)}
+                                  title="הסר הרשאת מנהל"
+                                  className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}

@@ -47,9 +47,9 @@ export async function assertVendorOwnership(
 }
 
 /**
- * Checks if a given email is designated as an authorized Admin in config/environment.
+ * Checks if a given email is designated as an authorized Admin in config/environment or Admins sheet.
  */
-export function isAuthorizedAdminEmail(email: string): boolean {
+export async function isAuthorizedAdminEmail(email: string): Promise<boolean> {
   const normalized = email.trim().toLowerCase();
   const adminEmailsEnv = process.env.ADMIN_EMAILS || "michael.liarzi@gmail.com,admin@example.com";
   const list = adminEmailsEnv
@@ -57,7 +57,16 @@ export function isAuthorizedAdminEmail(email: string): boolean {
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
 
-  return list.includes(normalized);
+  if (list.includes(normalized)) {
+    return true;
+  }
+
+  try {
+    const admins = await sheetsRepository.getAdmins();
+    return admins.some((a) => a.email.toLowerCase() === normalized && a.role === "Admin");
+  } catch {
+    return false;
+  }
 }
 
 /**

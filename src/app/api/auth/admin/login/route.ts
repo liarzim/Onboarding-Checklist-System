@@ -46,7 +46,8 @@ export async function POST(request: Request) {
     const { isAuthorizedAdminEmail } = await import("@/lib/security");
 
     // If the email is a configured admin email, ensure the role is 'Admin'
-    const role = isAuthorizedAdminEmail(email) ? "Admin" : requestedRole;
+    const isAdmin = await isAuthorizedAdminEmail(email);
+    const role = isAdmin ? "Admin" : requestedRole;
 
     const token = await signAdminToken({
       user_id: `user_${role.toLowerCase()}_${Date.now()}`,
