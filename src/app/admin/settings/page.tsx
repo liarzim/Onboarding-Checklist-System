@@ -51,6 +51,7 @@ export default function AdminSettingsPage() {
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [newAdminName, setNewAdminName] = useState("");
   const [newAdminRole, setNewAdminRole] = useState<"Admin" | "HR">("Admin");
+  const [newAdminPassword, setNewAdminPassword] = useState("");
 
   useEffect(() => {
     fetchSettings();
@@ -274,6 +275,7 @@ export default function AdminSettingsPage() {
           email: emailTrimmed,
           full_name: nameTrimmed,
           role: newAdminRole,
+          initial_password: newAdminPassword.trim(),
         }),
       });
       const json = await res.json();
@@ -281,6 +283,7 @@ export default function AdminSettingsPage() {
         setMessage({ type: "success", text: json.message });
         setNewAdminEmail("");
         setNewAdminName("");
+        setNewAdminPassword("");
         await fetchSettings();
       } else {
         setMessage({ type: "error", text: json.message || "שגיאה בהוספת מנהל" });
@@ -930,7 +933,7 @@ export default function AdminSettingsPage() {
                     <UserPlus className="w-4 h-4 text-blue-600" />
                     <span>הוספת מנהל / נציג HR חדש</span>
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">
                         כתובת אימייל (Google / ארגוני)
@@ -959,6 +962,21 @@ export default function AdminSettingsPage() {
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        סיסמה ראשונית (אופציונלי)
+                      </label>
+                      <input
+                        type="password"
+                        value={newAdminPassword}
+                        onChange={(e) => setNewAdminPassword(e.target.value)}
+                        placeholder="לפחות 6 תווים"
+                        className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-500"
+                      />
+                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                        המשתמש יחויב להחליפה בכניסה ראשונה
+                      </span>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
                         תפקיד במערכת
                       </label>
                       <div className="flex items-center gap-2">
@@ -967,8 +985,8 @@ export default function AdminSettingsPage() {
                           onChange={(e) => setNewAdminRole(e.target.value as "Admin" | "HR")}
                           className="flex-1 text-xs bg-white border border-slate-300 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-500"
                         >
-                          <option value="Admin">מנהל מערכת (Admin) - גישה מלאה</option>
-                          <option value="HR">משאבי אנוש (HR) - בקרת מועמדים</option>
+                          <option value="Admin">מנהל מערכת (Admin)</option>
+                          <option value="HR">משאבי אנוש (HR)</option>
                         </select>
                         <button
                           type="submit"
@@ -989,8 +1007,9 @@ export default function AdminSettingsPage() {
                     <thead>
                       <tr className="border-b border-slate-200 text-slate-500 bg-slate-50">
                         <th className="py-2.5 px-3 font-semibold">שם מלא</th>
-                        <th className="py-2.5 px-3 font-semibold">אימייל (Google Account)</th>
+                        <th className="py-2.5 px-3 font-semibold">אימייל</th>
                         <th className="py-2.5 px-3 font-semibold text-center">תפקיד</th>
+                        <th className="py-2.5 px-3 font-semibold text-center">אופן כניסה / סטטוס סיסמה</th>
                         <th className="py-2.5 px-3 font-semibold">תאריך צירוף</th>
                         <th className="py-2.5 px-3 font-semibold text-center">פעולות</th>
                       </tr>
@@ -1021,6 +1040,21 @@ export default function AdminSettingsPage() {
                               >
                                 {adm.role === "Admin" ? "מנהל מערכת (Admin)" : "משאבי אנוש (HR)"}
                               </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              {adm.must_change_password ? (
+                                <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                                  ממתין להחלפת סיסמה ראשונית
+                                </span>
+                              ) : adm.password_hash ? (
+                                <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                  סיסמה אישית פעילה + Google
+                                </span>
+                              ) : (
+                                <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                                  Google OAuth בלבד
+                                </span>
+                              )}
                             </td>
                             <td className="py-2.5 px-3 text-slate-500">
                               {adm.added_at && !isNaN(Date.parse(adm.added_at))

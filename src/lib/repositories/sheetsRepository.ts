@@ -754,12 +754,18 @@ export class SheetsRepository {
         email: "michael.liarzi@gmail.com",
         full_name: "מיכאל (מנהל ראשי)",
         role: "Admin",
+        password_hash: "",
+        must_change_password: false,
+        auth_provider: "both",
         added_at: "מערכת ראשית",
       },
       {
         email: "admin@example.com",
         full_name: "מנהל מערכת ראשי",
         role: "Admin",
+        password_hash: "",
+        must_change_password: false,
+        auth_provider: "both",
         added_at: "ברירת מחדל",
       },
     ];
@@ -767,7 +773,7 @@ export class SheetsRepository {
     try {
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${SHEET_NAMES.ADMINS}!A2:D`,
+        range: `${SHEET_NAMES.ADMINS}!A2:G`,
       });
 
       const rows = response.data.values || [];
@@ -776,7 +782,10 @@ export class SheetsRepository {
           email: String(row[0] || "").trim().toLowerCase(),
           full_name: String(row[1] || "").trim(),
           role: (String(row[2] || "").trim() === "HR" ? "HR" : "Admin") as "Admin" | "HR",
-          added_at: String(row[3] || "").trim() || new Date().toISOString(),
+          password_hash: String(row[3] || "").trim(),
+          must_change_password: String(row[4] || "").trim().toUpperCase() === "TRUE",
+          auth_provider: (String(row[5] || "").trim() || "both") as "local" | "google" | "both",
+          added_at: String(row[6] || "").trim() || new Date().toISOString(),
         }))
         .filter((a) => a.email.length > 0);
 
@@ -796,6 +805,14 @@ export class SheetsRepository {
   }
 
   /**
+   * Retrieves a single admin user by email.
+   */
+  async getAdminByEmail(email: string): Promise<AdminUser | null> {
+    const admins = await this.getAdmins();
+    return admins.find((a) => a.email.toLowerCase() === email.trim().toLowerCase()) || null;
+  }
+
+  /**
    * Adds or updates an admin / HR user in the Admins sheet tab.
    */
   async saveAdmin(user: AdminUser): Promise<void> {
@@ -807,7 +824,7 @@ export class SheetsRepository {
     try {
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${SHEET_NAMES.ADMINS}!A2:D`,
+        range: `${SHEET_NAMES.ADMINS}!A2:G`,
       });
       existingRows = response.data.values || [];
     } catch {
@@ -822,6 +839,9 @@ export class SheetsRepository {
       sanitizeSheetCellValue(normalizedEmail),
       sanitizeSheetCellValue(user.full_name),
       sanitizeSheetCellValue(user.role),
+      sanitizeSheetCellValue(user.password_hash || ""),
+      user.must_change_password ? "TRUE" : "FALSE",
+      sanitizeSheetCellValue(user.auth_provider || "both"),
       sanitizeSheetCellValue(user.added_at || new Date().toISOString()),
     ];
 
@@ -829,7 +849,7 @@ export class SheetsRepository {
       const sheetRowNumber = rowIndex + 2;
       await sheets.spreadsheets.values.update({
         spreadsheetId,
-        range: `${SHEET_NAMES.ADMINS}!A${sheetRowNumber}:D${sheetRowNumber}`,
+        range: `${SHEET_NAMES.ADMINS}!A${sheetRowNumber}:G${sheetRowNumber}`,
         valueInputOption: "USER_ENTERED",
         requestBody: {
           values: [adminRow],
@@ -839,7 +859,7 @@ export class SheetsRepository {
       try {
         await sheets.spreadsheets.values.append({
           spreadsheetId,
-          range: `${SHEET_NAMES.ADMINS}!A:D`,
+          range: `${SHEET_NAMES.ADMINS}!A:G`,
           valueInputOption: "USER_ENTERED",
           insertDataOption: "INSERT_ROWS",
           requestBody: {
@@ -850,10 +870,21 @@ export class SheetsRepository {
         // Create tab with header row
         await sheets.spreadsheets.values.append({
           spreadsheetId,
-          range: `${SHEET_NAMES.ADMINS}!A:D`,
+          range: `${SHEET_NAMES.ADMINS}!A:G`,
           valueInputOption: "USER_ENTERED",
           requestBody: {
-            values: [["אימייל", "שם מלא", "תפקיד", "תאריך הוספה"], adminRow],
+            values: [
+              [
+                "אימייל",
+                "שם מלא",
+                "תפקיד",
+                "סיסמה מוצפנת",
+                "חובת שינוי סיסמה",
+                "ספק הזדהות",
+                "תאריך הוספה",
+              ],
+              adminRow,
+            ],
           },
         });
       }
@@ -871,7 +902,7 @@ export class SheetsRepository {
     try {
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${SHEET_NAMES.ADMINS}!A2:D`,
+        range: `${SHEET_NAMES.ADMINS}!A2:G`,
       });
       const rows = response.data.values || [];
       const updatedRows = rows.filter(
@@ -880,13 +911,13 @@ export class SheetsRepository {
 
       await sheets.spreadsheets.values.clear({
         spreadsheetId,
-        range: `${SHEET_NAMES.ADMINS}!A2:D`,
+        range: `${SHEET_NAMES.ADMINS}!A2:G`,
       });
 
       if (updatedRows.length > 0) {
         await sheets.spreadsheets.values.update({
           spreadsheetId,
-          range: `${SHEET_NAMES.ADMINS}!A2:D${updatedRows.length + 1}`,
+          range: `${SHEET_NAMES.ADMINS}!A2:G${updatedRows.length + 1}`,
           valueInputOption: "USER_ENTERED",
           requestBody: {
             values: updatedRows,

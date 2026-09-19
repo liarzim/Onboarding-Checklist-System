@@ -85,6 +85,9 @@ export const AdminUserSchema = z.object({
   email: z.string().email(),
   full_name: z.string().min(1),
   role: z.enum(["Admin", "HR"]).default("Admin"),
+  password_hash: z.string().optional().default(""),
+  must_change_password: z.boolean().optional().default(false),
+  auth_provider: z.enum(["local", "google", "both"]).optional().default("both"),
   added_at: z.string().optional(),
 });
 

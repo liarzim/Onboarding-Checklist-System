@@ -42,34 +42,86 @@ export async function POST(request: Request) {
       );
     }
 
-    const { email, role: requestedRole, fullName } = parsed.data;
+    const { email, password, role: requestedRole, fullName } = parsed.data;
+    const normalizedEmail = email.toLowerCase().trim();
     const { isAuthorizedAdminEmail } = await import("@/lib/security");
+    const { sheetsRepository } = await import("@/lib/repositories/sheetsRepository");
+    const { verifyPassword } = await import("@/lib/password");
 
-    // If the email is a configured admin email, ensure the role is 'Admin'
-    const isAdmin = await isAuthorizedAdminEmail(email);
-    const role = isAdmin ? "Admin" : requestedRole;
+    // 1. Check if user is registered in system or env
+    const isAuthorized = await isAuthorizedAdminEmail(normalizedEmail);
+    const adminRecord = await sheetsRepository.getAdminByEmail(normalizedEmail);
+
+    if (!isAuthorized && !adminRecord) {
+      return NextResponse.json(
+        {
+          error: "Unauthorized",
+          message: "כתובת האימייל אינה מורשית במערכת. אנא פנה למנהל המערכת.",
+        },
+        { status: 403 }
+      );
+    }
+
+    // 2. If password is provided, verify password hash if user has password set
+    if (adminRecord && adminRecord.password_hash) {
+      if (!password) {
+        return NextResponse.json(
+          {
+            error: "Password required",
+            message: "משתמש זה מוגדר עם סיסמה. יש להזין סיסמה.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const isValidPassword = await verifyPassword(password, adminRecord.password_hash);
+      if (!isValidPassword) {
+        return NextResponse.json(
+          {
+            error: "Invalid credentials",
+            message: "סיסמה שגויה",
+          },
+          { status: 401 }
+        );
+      }
+
+      // Check if user must change their initial password
+      if (adminRecord.must_change_password) {
+        return NextResponse.json({
+          success: true,
+          requirePasswordChange: true,
+          email: normalizedEmail,
+          message: "התחברת עם סיסמה ראשונית. הינך נדרש לעדכן סיסמה אישית כעת.",
+        });
+      }
+    }
+
+    const role = (adminRecord?.role || (isAuthorized ? "Admin" : requestedRole)) as "Admin" | "HR";
+    const userDisplayName =
+      fullName ||
+      adminRecord?.full_name ||
+      (role === "Admin"
+        ? normalizedEmail === "michael.liarzi@gmail.com"
+          ? "מיכאל (מנהל ראשי)"
+          : "מנהל מערכת"
+        : "נציגת משאבי אנוש");
 
     const token = await signAdminToken({
       user_id: `user_${role.toLowerCase()}_${Date.now()}`,
-      full_name:
-        fullName ||
-        (role === "Admin"
-          ? email.toLowerCase() === "michael.liarzi@gmail.com"
-            ? "מיכאל (מנהל ראשי)"
-            : "מנהל מערכת"
-          : "נציגת משאבי אנוש"),
-      email: email.toLowerCase(),
-      role: role as "HR" | "Admin",
+      full_name: userDisplayName,
+      email: normalizedEmail,
+      role,
     });
 
     setAdminAuthCookie(token);
 
     return NextResponse.json({
       success: true,
+      requirePasswordChange: false,
       user: {
-        email,
+        email: normalizedEmail,
         role,
-        fullName: fullName || (role === "HR" ? "נציגת משאבי אנוש" : "מנהל מערכת"),
+        fullName: userDisplayName,
       },
     });
   } catch (error) {
