@@ -17,8 +17,10 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const error = url.searchParams.get("error");
-  const env = getEnv();
-  const baseUrl = env.NEXT_PUBLIC_APP_URL || url.origin;
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  const proto = request.headers.get("x-forwarded-proto") || "https";
+  const baseUrl = host ? `${proto}://${host}` : url.origin;
+  const redirectUri = `${baseUrl}/api/auth/google/callback`;
 
   if (error || !code) {
     const loginUrl = new URL("/admin/login", baseUrl);
@@ -32,8 +34,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 1. Verify code and fetch user profile from Google
-    const profile = await verifyGoogleOAuthCode(code);
+    // 1. Verify code and fetch user profile from Google using the matching redirectUri
+    const profile = await verifyGoogleOAuthCode(code, redirectUri);
     const email = profile.email.toLowerCase().trim();
 
     // 2. Check if user is an authorized Admin or HR

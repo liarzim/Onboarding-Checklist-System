@@ -70,8 +70,8 @@ export function getOAuth2Client(redirectUri?: string) {
   return new google.auth.OAuth2(clientId, clientSecret, callbackUrl);
 }
 
-export function getGoogleAuthUrl(): string {
-  const oauth2Client = getOAuth2Client();
+export function getGoogleAuthUrl(redirectUri?: string): string {
+  const oauth2Client = getOAuth2Client(redirectUri);
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
@@ -82,8 +82,8 @@ export function getGoogleAuthUrl(): string {
   });
 }
 
-export async function verifyGoogleOAuthCode(code: string) {
-  const oauth2Client = getOAuth2Client();
+export async function verifyGoogleOAuthCode(code: string, redirectUri?: string) {
+  const oauth2Client = getOAuth2Client(redirectUri);
   const { tokens } = await oauth2Client.getToken(code);
   oauth2Client.setCredentials(tokens);
 

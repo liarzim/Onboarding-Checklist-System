@@ -25,12 +25,15 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const callbackRedirect = searchParams.get("redirect") || "/admin";
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    const origin = host ? `${proto}://${host}` : new URL(request.url).origin;
+    const redirectUri = `${origin}/api/auth/google/callback`;
 
-    // Build auth URL
-    const authUrl = getGoogleAuthUrl();
+    // Build auth URL with dynamic Vercel / production origin
+    const authUrl = getGoogleAuthUrl(redirectUri);
 
-    // Store intended redirect if needed or redirect straight to Google
+    // Redirect straight to Google
     return NextResponse.redirect(authUrl);
   } catch (error) {
     const message = error instanceof Error ? error.message : "שגיאה ביצירת קישור הזדהות עם Google";
