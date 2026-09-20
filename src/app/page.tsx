@@ -568,43 +568,6 @@ function UnifiedIdentificationContent() {
                 )}
               </button>
             </form>
-
-            {/* Quick Demo Test Logins */}
-            <div className="pt-3 border-t border-slate-700/80 space-y-2">
-              <span className="block text-center text-[11px] text-slate-400">
-                כניסה מהירה לחשבונות מורשים לבדיקה:
-              </span>
-              <button
-                type="button"
-                onClick={() => handleUnifiedLogin("michael.liarzi@gmail.com")}
-                disabled={loading}
-                className="w-full py-2 px-3 bg-amber-600/20 hover:bg-amber-600/30 text-amber-200 text-xs font-semibold rounded-xl transition flex items-center justify-center gap-2 border border-amber-500/40"
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-                <span>התחבר כ-Admin (michael.liarzi@gmail.com)</span>
-              </button>
-
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleUnifiedLogin("hr@example.com")}
-                  disabled={loading}
-                  className="py-1.5 px-2 bg-slate-700/60 hover:bg-slate-700 text-slate-200 rounded-xl transition flex items-center justify-center gap-1 border border-slate-600 text-[11px]"
-                >
-                  <UserCheck className="w-3 h-3 text-blue-400" />
-                  <span>כניסת HR Demo</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleUnifiedLogin("vendor@example.com")}
-                  disabled={loading}
-                  className="py-1.5 px-2 bg-slate-700/60 hover:bg-slate-700 text-slate-200 rounded-xl transition flex items-center justify-center gap-1 border border-slate-600 text-[11px]"
-                >
-                  <Building2 className="w-3 h-3 text-emerald-400" />
-                  <span>כניסת ספק Demo</span>
-                </button>
-              </div>
-            </div>
           </div>
         )}
       </div>
