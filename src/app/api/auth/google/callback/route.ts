@@ -32,6 +32,20 @@ export async function GET(request: Request) {
     return NextResponse.redirect(loginUrl);
   }
 
+  const { getOAuth2Credentials } = await import("@/lib/google");
+  const { clientId, clientSecret } = getOAuth2Credentials();
+  if (!clientId || !clientSecret) {
+    const missing = [!clientId && "GOOGLE_CLIENT_ID", !clientSecret && "GOOGLE_CLIENT_SECRET"]
+      .filter(Boolean)
+      .join(" ו-");
+    const loginUrl = new URL("/admin/login", baseUrl);
+    loginUrl.searchParams.set(
+      "error",
+      `משתנה סביבה חסר ב-Vercel (${missing}). יש לוודא שסומנו כל הסביבות (Production, Preview) ב-Vercel ולבצע Redeploy.`
+    );
+    return NextResponse.redirect(loginUrl);
+  }
+
   try {
     // 1. Verify code and fetch user profile from Google using matching redirectUri
     const profile = await verifyGoogleOAuthCode(code, redirectUri);
@@ -85,8 +99,13 @@ export async function GET(request: Request) {
   } catch (err: any) {
     console.error("Google OAuth callback error:", err);
     const loginUrl = new URL("/admin/login", baseUrl);
-    const errMsg = err?.message || "פג תוקף הקוד או בעיית אימות";
-    loginUrl.searchParams.set("error", `אימות חשבון Google נכשל: ${errMsg}`);
+    const errMsg = String(err?.message || "");
+    let displayError = `אימות חשבון Google נכשל: ${errMsg || "פג תוקף הקוד"}`;
+    if (errMsg.toLowerCase().includes("invalid_client")) {
+      displayError =
+        "אימות נכשל (invalid_client): ה-Client Secret אינו תואם ל-Client ID או שהמשתנה אינו מוגדר עבור סביבת Preview ב-Vercel.";
+    }
+    loginUrl.searchParams.set("error", displayError);
     return NextResponse.redirect(loginUrl);
   }
 }
