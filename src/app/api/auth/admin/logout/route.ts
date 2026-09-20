@@ -1,14 +1,24 @@
 import { NextResponse } from "next/server";
-import { clearAdminAuthCookie, getAdminSession } from "@/lib/auth";
+import { clearAdminAuthCookie } from "@/lib/auth";
 
-export async function POST() {
+export const dynamic = "force-dynamic";
+
+export async function POST(request: Request) {
   clearAdminAuthCookie();
-  return NextResponse.json({ success: true, message: "Admin logged out successfully" });
+
+  // If invoked via fetch/AJAX expecting JSON
+  const acceptHeader = request.headers.get("accept") || "";
+  if (acceptHeader.includes("application/json")) {
+    return NextResponse.json({ success: true, redirectUrl: "/" });
+  }
+
+  // Standard HTML form submission: redirect directly to root login screen
+  const url = new URL(request.url);
+  return NextResponse.redirect(new URL("/", url.origin), { status: 303 });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   clearAdminAuthCookie();
-  return NextResponse.redirect(
-    new URL("/", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
-  );
+  const url = new URL(request.url);
+  return NextResponse.redirect(new URL("/", url.origin), { status: 303 });
 }
