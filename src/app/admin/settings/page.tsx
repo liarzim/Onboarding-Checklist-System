@@ -307,6 +307,13 @@ export default function AdminSettingsPage() {
   }
 
   async function handleAutoCreateResources() {
+    if (!isOauthConnected && !googlePrivateKeyConfigured) {
+      setMessage({
+        type: "error",
+        text: "טרם חובר חשבון Google! יש להשלים תחילה את שלב 1 למעלה (חיבור חשבון Google של האדמין או הזנת מפתח שירות) לפני יצירת הגיליון והתיקייה.",
+      });
+      return;
+    }
     setAutoCreateLoading(true);
     setMessage(null);
     try {
@@ -1829,6 +1836,30 @@ export default function AdminSettingsPage() {
                     המערכת תייצר עבורך באופן מיידי בתוך חשבון ה-Google המחובר: תיקייה ראשית ב-Drive, גיליון נתונים ב-Sheets עם כל 8 הטאבים הנדרשים (Candidates, ChecklistItems, DocumentTypes, SettingStages, Vendors, Projects, Admins, AuditLogs), עמודות הכותרת, שלבי התהליך, רשימת הטפסים והפרויקטים, ותחבר אותם ישירות למערכת.
                   </p>
 
+                  {/* WARNING IF STEP 1 NOT DONE */}
+                  {!isOauthConnected && !googlePrivateKeyConfigured && (
+                    <div className="p-3.5 bg-amber-50 border-2 border-amber-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2.5 text-amber-900">
+                        <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                        <div>
+                          <p className="font-bold text-amber-950 text-xs">
+                            חובה להשלים תחילה את שלב 1 למעלה:
+                          </p>
+                          <p className="text-[11px] text-amber-800">
+                            כדי ש-Google יאפשר ליצור קבצים ותיקיות, המערכת זקוקה לחיבור לחשבונך. לחץ על הכפתור הכחול בשלב 1: &quot;חבר חשבון Google של האדמין&quot;.
+                          </p>
+                        </div>
+                      </div>
+                      <a
+                        href="/api/auth/google/connect-drive"
+                        className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition shrink-0 shadow-xs text-xs"
+                      >
+                        <Cloud className="w-3.5 h-3.5" />
+                        <span>חבר חשבון Google עכשיו</span>
+                      </a>
+                    </div>
+                  )}
+
                   {/* LOCATION SELECTION CONTROLS */}
                   <div className="bg-white p-4 rounded-xl border border-blue-200 space-y-4">
                     <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 pb-2 border-b border-slate-100">
@@ -2024,17 +2055,26 @@ export default function AdminSettingsPage() {
                           type="button"
                           onClick={handleAutoCreateResources}
                           disabled={autoCreateLoading}
-                          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg transition shadow-md disabled:opacity-50"
+                          className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-bold text-white rounded-lg transition shadow-md disabled:opacity-50 ${
+                            isOauthConnected || googlePrivateKeyConfigured
+                              ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                              : "bg-slate-600 hover:bg-slate-700"
+                          }`}
                         >
                           {autoCreateLoading ? (
                             <>
                               <RefreshCw className="w-4 h-4 animate-spin" />
                               <span>מקים תיקייה ומסד נתונים ב-Google...</span>
                             </>
-                          ) : (
+                          ) : isOauthConnected || googlePrivateKeyConfigured ? (
                             <>
                               <Sparkles className="w-4 h-4 text-amber-300" />
                               <span>צור גיליון ותיקייה אוטומטית עכשיו</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle className="w-4 h-4 text-amber-300" />
+                              <span>יש לחבר חשבון בשלב 1 תחילה</span>
                             </>
                           )}
                         </button>

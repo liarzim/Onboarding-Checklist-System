@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDriveClient, getSheetsClient, resetGoogleClients } from "@/lib/google";
-import { resetEnvCache } from "@/lib/env";
+import { getEnv, resetEnvCache } from "@/lib/env";
 import {
   saveDynamicGoogleConfig,
   getDynamicGoogleConfig,
@@ -51,6 +51,25 @@ export async function POST(request: Request) {
       rawCustomSheetFolder ? extractDriveFolderId(rawCustomSheetFolder) : "";
 
     const dynamicConfig = getDynamicGoogleConfig();
+    const env = getEnv();
+
+    const isConnected =
+      Boolean(dynamicConfig.oauth_refresh_token) ||
+      Boolean(
+        dynamicConfig.service_account_private_key ||
+          (env.GOOGLE_PRIVATE_KEY && env.GOOGLE_PRIVATE_KEY.length > 50)
+      );
+
+    if (!isConnected) {
+      return NextResponse.json(
+        {
+          error: "Google Not Connected",
+          message:
+            "טרם חובר חשבון Google. יש להשלים תחילה את שלב 1: לחץ על 'חבר חשבון Google של האדמין' או הזן מפתח שירות, ורק לאחר מכן לחץ על צור משאבים.",
+        },
+        { status: 400 }
+      );
+    }
 
     // 1. Get Google API clients
     let drive: ReturnType<typeof getDriveClient>;
