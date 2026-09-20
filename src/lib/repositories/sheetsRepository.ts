@@ -56,44 +56,48 @@ export class SheetsRepository {
    * Fetches candidate list with optional filtering by vendor_id and is_completed status.
    */
   async getCandidates(filter?: ICandidatesFilter): Promise<Candidate[]> {
-    const sheets = getSheetsClient();
-    const spreadsheetId = this.getSpreadsheetId();
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
 
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${SHEET_NAMES.CANDIDATES}!A2:P`,
-    });
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CANDIDATES}!A2:P`,
+      });
 
-    const rows = response.data.values || [];
+      const rows = response.data.values || [];
 
-    const candidates: Candidate[] = rows.map((row) => ({
-      candidate_id: String(row[0] || ""),
-      full_name: String(row[1] || ""),
-      id_number: String(row[2] || ""),
-      email: String(row[3] || ""),
-      phone: String(row[4] || ""),
-      vendor_id: String(row[5] || ""),
-      project_id: String(row[6] || ""),
-      drive_folder_id: String(row[7] || ""),
-      current_stage_id: String(row[8] || "stage_1"),
-      is_completed: String(row[9] ?? "").toUpperCase() === "TRUE",
-      created_at: String(row[10] || new Date().toISOString()),
-      updated_at: String(row[11] || new Date().toISOString()),
-      access_token: row[12] ? String(row[12]) : null,
-      token_expires_at: row[13] ? String(row[13]) : null,
-      is_signed_by_candidate: String(row[14] ?? "").toUpperCase() === "TRUE",
-      signature_url: row[15] ? String(row[15]) : null,
-    }));
+      const candidates: Candidate[] = rows.map((row) => ({
+        candidate_id: String(row[0] || ""),
+        full_name: String(row[1] || ""),
+        id_number: String(row[2] || ""),
+        email: String(row[3] || ""),
+        phone: String(row[4] || ""),
+        vendor_id: String(row[5] || ""),
+        project_id: String(row[6] || ""),
+        drive_folder_id: String(row[7] || ""),
+        current_stage_id: String(row[8] || "stage_1"),
+        is_completed: String(row[9] ?? "").toUpperCase() === "TRUE",
+        created_at: String(row[10] || new Date().toISOString()),
+        updated_at: String(row[11] || new Date().toISOString()),
+        access_token: row[12] ? String(row[12]) : null,
+        token_expires_at: row[13] ? String(row[13]) : null,
+        is_signed_by_candidate: String(row[14] ?? "").toUpperCase() === "TRUE",
+        signature_url: row[15] ? String(row[15]) : null,
+      }));
 
-    return candidates.filter((c) => {
-      if (filter?.vendor_id !== undefined && c.vendor_id !== filter.vendor_id) {
-        return false;
-      }
-      if (filter?.is_completed !== undefined && c.is_completed !== filter.is_completed) {
-        return false;
-      }
-      return true;
-    });
+      return candidates.filter((c) => {
+        if (filter?.vendor_id !== undefined && c.vendor_id !== filter.vendor_id) {
+          return false;
+        }
+        if (filter?.is_completed !== undefined && c.is_completed !== filter.is_completed) {
+          return false;
+        }
+        return true;
+      });
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -316,21 +320,23 @@ export class SheetsRepository {
    * Retrieves workflow stages from SettingStages tab or defaults.
    */
   async getSettingStages(): Promise<SettingStage[]> {
-    const sheets = getSheetsClient();
-    const spreadsheetId = this.getSpreadsheetId();
-
     try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
+
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: `${SHEET_NAMES.SETTING_STAGES}!A2:D`,
       });
 
       const rows = response.data.values || [];
-      if (rows.length === 0) {
+      const validRows = rows.filter((row) => row && row[0] && String(row[0]).trim().length > 0);
+
+      if (validRows.length === 0) {
         return DEFAULT_SETTING_STAGES;
       }
 
-      return rows.map((row) => ({
+      return validRows.map((row) => ({
         stage_id: String(row[0] || ""),
         stage_name: String(row[1] || ""),
         stage_order: Number(row[2] || 0),
@@ -345,24 +351,26 @@ export class SheetsRepository {
    * Retrieves document types from DocumentTypes sheet, falling back to default required documents.
    */
   async getDocumentTypes(): Promise<DocumentType[]> {
-    const sheets = getSheetsClient();
-    const spreadsheetId = this.getSpreadsheetId();
-
     try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
+
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: `${SHEET_NAMES.DOCUMENT_TYPES}!A2:E`,
       });
 
       const rows = response.data.values || [];
-      if (rows.length === 0) {
+      const validRows = rows.filter((row) => row && row[0] && String(row[0]).trim().length > 0);
+
+      if (validRows.length === 0) {
         return DEFAULT_REQUIRED_DOCUMENTS.map((doc) => ({
           ...doc,
           template_drive_url: null,
         }));
       }
 
-      return rows.map((row) => ({
+      return validRows.map((row) => ({
         doc_type_id: String(row[0] || ""),
         doc_name: String(row[1] || ""),
         is_required: String(row[2] ?? "").toUpperCase() === "TRUE",
@@ -381,30 +389,34 @@ export class SheetsRepository {
    * Retrieves checklist items for a specific candidate.
    */
   async getChecklist(candidate_id: string): Promise<ChecklistItem[]> {
-    const sheets = getSheetsClient();
-    const spreadsheetId = this.getSpreadsheetId();
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
 
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A2:H`,
-    });
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A2:H`,
+      });
 
-    const rows = response.data.values || [];
+      const rows = response.data.values || [];
 
-    const items: ChecklistItem[] = rows
-      .filter((row) => String(row[1] || "") === candidate_id)
-      .map((row) => ({
-        checklist_item_id: String(row[0] || ""),
-        candidate_id: String(row[1] || ""),
-        doc_type_id: String(row[2] || ""),
-        status: String(row[3] || "Not_Uploaded"),
-        file_name: row[4] ? String(row[4]) : null,
-        file_drive_id: row[5] ? String(row[5]) : null,
-        file_drive_url: row[6] ? String(row[6]) : null,
-        updated_at: String(row[7] || new Date().toISOString()),
-      }));
+      const items: ChecklistItem[] = rows
+        .filter((row) => String(row[1] || "") === candidate_id)
+        .map((row) => ({
+          checklist_item_id: String(row[0] || ""),
+          candidate_id: String(row[1] || ""),
+          doc_type_id: String(row[2] || ""),
+          status: String(row[3] || "Not_Uploaded"),
+          file_name: row[4] ? String(row[4]) : null,
+          file_drive_id: row[5] ? String(row[5]) : null,
+          file_drive_url: row[6] ? String(row[6]) : null,
+          updated_at: String(row[7] || new Date().toISOString()),
+        }));
 
-    return items;
+      return items;
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -794,12 +806,15 @@ export class SheetsRepository {
       // Tab may not exist yet
     }
 
-    // Fallback: extract distinct projects from candidates
-    const candidates = await this.getCandidates();
-    const candidateProjects = candidates.map((c) => c.project_id.trim()).filter(Boolean);
-
-    const defaultProjects = ["פרויקט אלפא", "פרויקט סייבר", "פרויקט ענן", "פרויקט תשתיות"];
-    return Array.from(new Set([...candidateProjects, ...defaultProjects]));
+    try {
+      // Fallback: extract distinct projects from candidates
+      const candidates = await this.getCandidates();
+      const candidateProjects = candidates.map((c) => c.project_id.trim()).filter(Boolean);
+      const defaultProjects = ["פרויקט אלפא", "פרויקט סייבר", "פרויקט ענן", "פרויקט תשתיות"];
+      return Array.from(new Set([...candidateProjects, ...defaultProjects]));
+    } catch {
+      return ["פרויקט אלפא", "פרויקט סייבר", "פרויקט ענן", "פרויקט תשתיות"];
+    }
   }
 
   /**

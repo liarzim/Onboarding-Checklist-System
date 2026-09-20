@@ -21,17 +21,39 @@ import {
 } from "lucide-react";
 import type { SettingStage, DocumentType, Vendor, AdminUser } from "@/types/schema";
 
+const FALLBACK_DOCUMENTS: DocumentType[] = [
+  { doc_type_id: "doc_1", doc_name: "שאלון אישי רמה 5", is_required: true, order_index: 1, template_drive_url: "" },
+  { doc_type_id: "doc_2", doc_name: "עלון מידע לנבדק", is_required: true, order_index: 2, template_drive_url: "" },
+  { doc_type_id: "doc_3", doc_name: "הצהרה על קבלת כרטיס חכם", is_required: true, order_index: 3, template_drive_url: "" },
+  { doc_type_id: "doc_4", doc_name: "הסכמה למסירת מידע פלילי", is_required: true, order_index: 4, template_drive_url: "" },
+  { doc_type_id: "doc_5", doc_name: "התחייבות לשמירת סודיות", is_required: true, order_index: 5, template_drive_url: "" },
+  { doc_type_id: "doc_6", doc_name: "התחייבות לשמירת פרטיות", is_required: true, order_index: 6, template_drive_url: "" },
+  { doc_type_id: "doc_7", doc_name: "הימנעות מעבירות מחשב", is_required: true, order_index: 7, template_drive_url: "" },
+  { doc_type_id: "doc_8", doc_name: "הסכמה לניטור סייבר", is_required: true, order_index: 8, template_drive_url: "" },
+  { doc_type_id: "doc_9", doc_name: "בקשה להנפקת כרטיס חכם", is_required: true, order_index: 9, template_drive_url: "" },
+];
+
+const FALLBACK_STAGES: SettingStage[] = [
+  { stage_id: "stage_1", stage_name: "איסוף מסמכים ראשוני", stage_order: 1, is_terminal: false },
+  { stage_id: "stage_2", stage_name: "בדיקת ביטחון שדה", stage_order: 2, is_terminal: false },
+  { stage_id: "stage_3", stage_name: "אימות מסמכים ומשאבי אנוש", stage_order: 3, is_terminal: false },
+  { stage_id: "stage_4", stage_name: "מוכן להנפקת כרטיס חכם", stage_order: 4, is_terminal: false },
+  { stage_id: "stage_completed", stage_name: "הושלם והונפק כרטיס", stage_order: 5, is_terminal: true },
+];
+
+const FALLBACK_PROJECTS = ["פרויקט אלפא", "פרויקט סייבר", "פרויקט ענן", "פרויקט תשתיות"];
+
 export default function AdminSettingsPage() {
   const [activeTab, setActiveTab] = useState<"stages" | "documents" | "vendors" | "projects" | "admins">("stages");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Form State
-  const [stages, setStages] = useState<SettingStage[]>([]);
-  const [documents, setDocuments] = useState<DocumentType[]>([]);
+  // Form State initialized with defaults
+  const [stages, setStages] = useState<SettingStage[]>(FALLBACK_STAGES);
+  const [documents, setDocuments] = useState<DocumentType[]>(FALLBACK_DOCUMENTS);
   const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [projects, setProjects] = useState<string[]>([]);
+  const [projects, setProjects] = useState<string[]>(FALLBACK_PROJECTS);
   const [admins, setAdmins] = useState<AdminUser[]>([]);
 
   // Selected or New Vendor modal/row state
@@ -64,16 +86,40 @@ export default function AdminSettingsPage() {
       const res = await fetch("/api/admin/settings");
       const json = await res.json();
       if (res.ok && json.success) {
-        setStages(json.data.stages || []);
-        setDocuments(json.data.document_types || []);
+        setStages(
+          json.data.stages && json.data.stages.length > 0
+            ? json.data.stages
+            : FALLBACK_STAGES
+        );
+        setDocuments(
+          json.data.document_types && json.data.document_types.length > 0
+            ? json.data.document_types
+            : FALLBACK_DOCUMENTS
+        );
         setVendors(json.data.vendors || []);
-        setProjects(json.data.projects || []);
+        setProjects(
+          json.data.projects && json.data.projects.length > 0
+            ? json.data.projects
+            : FALLBACK_PROJECTS
+        );
         setAdmins(json.data.admins || []);
       } else {
-        setMessage({ type: "error", text: json.message || "שגיאה בטעינת נתוני הגדרות" });
+        setStages(FALLBACK_STAGES);
+        setDocuments(FALLBACK_DOCUMENTS);
+        setProjects(FALLBACK_PROJECTS);
+        setMessage({
+          type: "error",
+          text: json.message || "שגיאה בטעינת נתוני הגדרות, נטענו נתוני ברירת מחדל",
+        });
       }
     } catch {
-      setMessage({ type: "error", text: "שגיאת תקשורת בטעינת הגדרות מערכת" });
+      setStages(FALLBACK_STAGES);
+      setDocuments(FALLBACK_DOCUMENTS);
+      setProjects(FALLBACK_PROJECTS);
+      setMessage({
+        type: "error",
+        text: "שגיאת תקשורת בטעינת הגדרות מערכת, נטענו נתוני ברירת מחדל",
+      });
     } finally {
       setLoading(false);
     }
