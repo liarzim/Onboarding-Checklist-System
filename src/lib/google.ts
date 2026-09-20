@@ -142,11 +142,15 @@ export async function verifyGoogleOAuthCode(code: string, redirectUri?: string) 
   };
 }
 
-export function getGoogleDriveConnectUrl(redirectUri?: string): string {
+export function getGoogleDriveConnectUrl(
+  redirectUri?: string,
+  state: string = "connect_drive"
+): string {
   const oauth2Client = getOAuth2Client(redirectUri);
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
+    state,
     scope: [
       "https://www.googleapis.com/auth/userinfo.profile",
       "https://www.googleapis.com/auth/userinfo.email",

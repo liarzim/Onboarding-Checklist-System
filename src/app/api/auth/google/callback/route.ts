@@ -23,12 +23,23 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const error = url.searchParams.get("error");
+  const state = url.searchParams.get("state");
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
   const proto = request.headers.get("x-forwarded-proto") || "https";
   const baseUrl = host ? `${proto}://${host}` : url.origin;
   const redirectUri = `${baseUrl}/api/auth/google/callback`;
 
   if (error || !code) {
+    if (state === "connect_drive") {
+      const settingsUrl = new URL("/admin/settings", baseUrl);
+      settingsUrl.searchParams.set(
+        "googleError",
+        error === "access_denied"
+          ? "חיבור חשבון Google בוטל על ידי המשתמש"
+          : `שגיאה בתהליך ההתחברות מול Google: ${error || "חסר קוד אימות"}`
+      );
+      return NextResponse.redirect(settingsUrl);
+    }
     const loginUrl = new URL("/", baseUrl);
     loginUrl.searchParams.set(
       "error",
@@ -51,6 +62,42 @@ export async function GET(request: Request) {
       `משתנה סביבה חסר ב-Vercel (${missing}). יש לוודא שסומנו כל הסביבות (Production, Preview) ב-Vercel ולבצע Redeploy.`
     );
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Handle Google Drive / Sheets connection request from Admin Settings
+  if (state === "connect_drive") {
+    try {
+      const { exchangeCodeForDriveTokens, resetGoogleClients } = await import("@/lib/google");
+      const { resetEnvCache } = await import("@/lib/env");
+      const { saveDynamicGoogleConfig, getDynamicGoogleConfig } = await import("@/lib/dynamicConfig");
+
+      const tokenData = await exchangeCodeForDriveTokens(code, redirectUri);
+      const email = tokenData.email.toLowerCase().trim();
+
+      const currentConfig = getDynamicGoogleConfig();
+      const refreshToken =
+        tokenData.refreshToken || currentConfig.oauth_refresh_token || "";
+
+      saveDynamicGoogleConfig({
+        auth_mode: "oauth",
+        oauth_refresh_token: refreshToken,
+        oauth_email: email,
+      });
+
+      resetEnvCache();
+      resetGoogleClients();
+
+      const settingsUrl = new URL("/admin/settings", baseUrl);
+      settingsUrl.searchParams.set("googleSuccess", `חשבון Google (${email}) חובר בהצלחה`);
+      return NextResponse.redirect(settingsUrl);
+    } catch (err: any) {
+      const settingsUrl = new URL("/admin/settings", baseUrl);
+      settingsUrl.searchParams.set(
+        "googleError",
+        err instanceof Error ? err.message : "שגיאה בשמירת חיבור Google Drive"
+      );
+      return NextResponse.redirect(settingsUrl);
+    }
   }
 
   try {
