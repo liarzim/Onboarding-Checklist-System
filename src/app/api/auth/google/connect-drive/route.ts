@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     const host =
       request.headers.get("x-forwarded-host") || request.headers.get("host");
     const proto = request.headers.get("x-forwarded-proto") || "https";
+    const origin = host ? `${proto}://${host}` : new URL(request.url).origin;
     const redirectUri = `${origin}/api/auth/google/callback`;
 
     const authUrl = getGoogleDriveConnectUrl(redirectUri, "connect_drive");
