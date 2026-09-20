@@ -25,21 +25,29 @@ export default function HomePage() {
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <Link
-              href="/admin"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-xl shadow-lg shadow-slate-900/20 transition-all"
+              href="/login?portal=admin"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl shadow-lg shadow-slate-900/20 transition-all"
             >
-              <Shield className="w-4 h-4 text-blue-400" />
-              <span>פורטל משאבי אנוש (HR / Admin)</span>
-              <ArrowLeft className="w-4 h-4" />
+              <Shield className="w-4 h-4 text-amber-400" />
+              <span>כניסת HR / Admin</span>
+              <ArrowLeft className="w-3.5 h-3.5" />
             </Link>
 
             <Link
-              href="/vendor"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl shadow-lg shadow-blue-600/20 transition-all"
+              href="/login?portal=vendor"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-lg shadow-blue-600/20 transition-all"
             >
               <Building2 className="w-4 h-4" />
-              <span>פורטל ספקים</span>
-              <ArrowLeft className="w-4 h-4" />
+              <span>כניסת ספקים</span>
+              <ArrowLeft className="w-3.5 h-3.5" />
+            </Link>
+
+            <Link
+              href="/login?tab=register"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-lg shadow-emerald-600/20 transition-all"
+            >
+              <span>הרשמת ספק חדש</span>
+              <ArrowLeft className="w-3.5 h-3.5" />
             </Link>
           </div>
         </div>
