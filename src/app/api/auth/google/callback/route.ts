@@ -32,6 +32,7 @@ export async function GET(request: Request) {
   if (error || !code) {
     if (state === "connect_drive") {
       const settingsUrl = new URL("/admin/settings", baseUrl);
+      settingsUrl.searchParams.set("tab", "google");
       settingsUrl.searchParams.set(
         "googleError",
         error === "access_denied"
@@ -88,10 +89,12 @@ export async function GET(request: Request) {
       resetGoogleClients();
 
       const settingsUrl = new URL("/admin/settings", baseUrl);
+      settingsUrl.searchParams.set("tab", "google");
       settingsUrl.searchParams.set("googleSuccess", `חשבון Google (${email}) חובר בהצלחה`);
       return NextResponse.redirect(settingsUrl);
     } catch (err: any) {
       const settingsUrl = new URL("/admin/settings", baseUrl);
+      settingsUrl.searchParams.set("tab", "google");
       settingsUrl.searchParams.set(
         "googleError",
         err instanceof Error ? err.message : "שגיאה בשמירת חיבור Google Drive"

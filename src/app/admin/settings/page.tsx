@@ -67,6 +67,23 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Helper to change tab and persist to URL and localStorage
+  function handleTabChange(
+    tab: "stages" | "documents" | "vendors" | "projects" | "admins" | "google"
+  ) {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("admin_settings_active_tab", tab);
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", tab);
+        window.history.replaceState({}, "", url.toString());
+      } catch {
+        // Ignore
+      }
+    }
+  }
+
   // Form State initialized with defaults
   const [stages, setStages] = useState<SettingStage[]>(FALLBACK_STAGES);
   const [documents, setDocuments] = useState<DocumentType[]>(FALLBACK_DOCUMENTS);
@@ -134,24 +151,39 @@ export default function AdminSettingsPage() {
   } | null>(null);
 
   useEffect(() => {
-    fetchSettings();
-    fetchGoogleConnection();
-
-    // Check URL query parameters for Google OAuth callback status
+    // Check URL query parameters or localStorage for active tab
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
       const gSuccess = params.get("googleSuccess");
       const gError = params.get("googleError");
+
       if (gSuccess) {
-        setActiveTab("google");
+        handleTabChange("google");
         setMessage({ type: "success", text: gSuccess });
-        window.history.replaceState({}, "", "/admin/settings");
+        window.history.replaceState({}, "", "/admin/settings?tab=google");
       } else if (gError) {
-        setActiveTab("google");
+        handleTabChange("google");
         setMessage({ type: "error", text: gError });
-        window.history.replaceState({}, "", "/admin/settings");
+        window.history.replaceState({}, "", "/admin/settings?tab=google");
+      } else if (
+        tabParam &&
+        ["stages", "documents", "vendors", "projects", "admins", "google"].includes(tabParam)
+      ) {
+        setActiveTab(tabParam as any);
+      } else {
+        const savedTab = localStorage.getItem("admin_settings_active_tab");
+        if (
+          savedTab &&
+          ["stages", "documents", "vendors", "projects", "admins", "google"].includes(savedTab)
+        ) {
+          setActiveTab(savedTab as any);
+        }
       }
     }
+
+    fetchSettings();
+    fetchGoogleConnection();
   }, []);
 
   async function fetchSettings() {
@@ -719,7 +751,7 @@ export default function AdminSettingsPage() {
       {/* Tabs Navigation */}
       <div className="flex border-b border-slate-200 bg-white rounded-t-xl px-4 pt-2 gap-2 shadow-sm overflow-x-auto">
         <button
-          onClick={() => setActiveTab("stages")}
+          onClick={() => handleTabChange("stages")}
           className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
             activeTab === "stages"
               ? "border-blue-600 text-blue-600"
@@ -731,7 +763,7 @@ export default function AdminSettingsPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab("documents")}
+          onClick={() => handleTabChange("documents")}
           className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
             activeTab === "documents"
               ? "border-blue-600 text-blue-600"
@@ -743,7 +775,7 @@ export default function AdminSettingsPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab("vendors")}
+          onClick={() => handleTabChange("vendors")}
           className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
             activeTab === "vendors"
               ? "border-blue-600 text-blue-600"
@@ -755,7 +787,7 @@ export default function AdminSettingsPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab("projects")}
+          onClick={() => handleTabChange("projects")}
           className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
             activeTab === "projects"
               ? "border-blue-600 text-blue-600"
@@ -767,7 +799,7 @@ export default function AdminSettingsPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab("admins")}
+          onClick={() => handleTabChange("admins")}
           className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
             activeTab === "admins"
               ? "border-blue-600 text-blue-600"
@@ -779,7 +811,7 @@ export default function AdminSettingsPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab("google")}
+          onClick={() => handleTabChange("google")}
           className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
             activeTab === "google"
               ? "border-blue-600 text-blue-600"
@@ -793,7 +825,7 @@ export default function AdminSettingsPage() {
 
       {/* Main Tab Content */}
       <div className="bg-white p-6 rounded-b-xl border border-t-0 border-slate-200 shadow-sm min-h-[400px]">
-        {loading ? (
+        {loading && activeTab !== "google" ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
             <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
             <span className="text-sm">טוען הגדרות מגיליון הניהול...</span>
@@ -2012,24 +2044,32 @@ export default function AdminSettingsPage() {
 
                   {/* ACTIVE RESOURCES DISPLAY */}
                   {(googleSpreadsheetUrl || googleDriveFolderUrl) && (
-                    <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                        <span className="font-semibold text-emerald-900">
-                          משאבי המערכת מחוברים ופעילים:
+                    <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-xl space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                          <span className="font-bold text-emerald-950 text-sm">
+                            משאבי ה-Google מחוברים ופעילים במערכת!
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200 self-start sm:self-auto">
+                          מסד נתונים ותיקייה פעילים
                         </span>
                       </div>
-                      <div className="flex items-center gap-3">
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
                         {googleSpreadsheetUrl && (
                           <a
                             href={googleSpreadsheetUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 font-bold text-emerald-700 hover:underline"
+                            className="flex items-center justify-between p-2.5 bg-white border border-emerald-200 rounded-lg hover:bg-emerald-50/50 transition text-emerald-900 group shadow-xs"
                           >
-                            <FileSpreadsheet className="w-3.5 h-3.5" />
-                            <span>פתח גיליון Sheets</span>
-                            <ExternalLink className="w-3 h-3" />
+                            <span className="flex items-center gap-2 font-bold">
+                              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                              <span>גיליון נתונים (Sheets)</span>
+                            </span>
+                            <ExternalLink className="w-3.5 h-3.5 text-emerald-600 group-hover:translate-x-0.5 transition" />
                           </a>
                         )}
                         {googleDriveFolderUrl && (
@@ -2037,13 +2077,36 @@ export default function AdminSettingsPage() {
                             href={googleDriveFolderUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 font-bold text-blue-700 hover:underline"
+                            className="flex items-center justify-between p-2.5 bg-white border border-blue-200 rounded-lg hover:bg-blue-50/50 transition text-blue-900 group shadow-xs"
                           >
-                            <HardDrive className="w-3.5 h-3.5" />
-                            <span>פתח תיקיית Drive</span>
-                            <ExternalLink className="w-3 h-3" />
+                            <span className="flex items-center gap-2 font-bold">
+                              <HardDrive className="w-4 h-4 text-blue-600" />
+                              <span>תיקייה ראשית (Drive)</span>
+                            </span>
+                            <ExternalLink className="w-3.5 h-3.5 text-blue-600 group-hover:translate-x-0.5 transition" />
                           </a>
                         )}
+                      </div>
+
+                      <div className="pt-2 border-t border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                        <span className="text-slate-600 text-[11px]">
+                          לשמירת הגדרות אלו לצמיתות ב-Vercel (גם לאחר פריסות עתידיות):
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const snippet = `GOOGLE_SPREADSHEET_ID=${googleSpreadsheetId}\nGOOGLE_DRIVE_ROOT_FOLDER_ID=${googleDriveFolderId}`;
+                            navigator.clipboard.writeText(snippet);
+                            setMessage({
+                              type: "success",
+                              text: "משתני הסביבה הועתקו ללוח! ניתן להדביקם ב-Settings > Environment Variables ב-Vercel.",
+                            });
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-emerald-100/50 border border-emerald-300 rounded-lg text-emerald-800 font-bold transition text-xs shadow-xs self-start sm:self-auto"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>העתק משתני סביבה ל-Vercel</span>
+                        </button>
                       </div>
                     </div>
                   )}

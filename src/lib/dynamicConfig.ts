@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import os from "os";
 
 export interface DynamicGoogleConfig {
   auth_mode?: "service_account" | "oauth";
@@ -12,7 +13,13 @@ export interface DynamicGoogleConfig {
   updated_at?: string;
 }
 
-const CONFIG_FILE_PATH = path.join(process.cwd(), "data", "google-config.json");
+declare global {
+  // eslint-disable-next-line no-var
+  var __dynamicGoogleConfigCache: DynamicGoogleConfig | undefined;
+}
+
+const PRIMARY_CONFIG_PATH = path.join(process.cwd(), "data", "google-config.json");
+const FALLBACK_CONFIG_PATH = path.join(os.tmpdir(), "google-config.json");
 
 /**
  * Parses Google Cloud Service Account JSON and extracts client_email and private_key.
@@ -62,7 +69,7 @@ export function extractSpreadsheetId(input: string): string {
   const trimmed = (input || "").trim();
   if (!trimmed) return "";
 
-  // Check if it's a full Google Sheets URL
+  // Check if it is a full Google Sheets URL
   const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
   if (match && match[1]) {
     return match[1];
@@ -83,7 +90,7 @@ export function extractDriveFolderId(input: string): string {
   const trimmed = (input || "").trim();
   if (!trimmed) return "";
 
-  // Check if it's a full Google Drive folder URL
+  // Check if it is a full Google Drive folder URL
   const match = trimmed.match(/\/folders\/([a-zA-Z0-9-_]+)/);
   if (match && match[1]) {
     return match[1];
@@ -93,40 +100,77 @@ export function extractDriveFolderId(input: string): string {
 }
 
 /**
- * Reads dynamic configuration stored on disk (if present).
+ * Reads dynamic configuration stored on disk or in serverless memory cache.
  */
 export function getDynamicGoogleConfig(): DynamicGoogleConfig {
+  let fileConfig: DynamicGoogleConfig = {};
+
+  // 1. Try primary storage (local repo data/ folder)
   try {
-    if (fs.existsSync(CONFIG_FILE_PATH)) {
-      const content = fs.readFileSync(CONFIG_FILE_PATH, "utf-8");
-      return JSON.parse(content) as DynamicGoogleConfig;
+    if (fs.existsSync(PRIMARY_CONFIG_PATH)) {
+      const content = fs.readFileSync(PRIMARY_CONFIG_PATH, "utf-8");
+      fileConfig = JSON.parse(content) as DynamicGoogleConfig;
     }
-  } catch (error) {
-    console.warn("Could not read dynamic Google config from disk:", error);
+  } catch {
+    // Primary path unreadable or non-existent, try fallback
   }
-  return {};
+
+  // 2. Try fallback storage in os.tmpdir() (used in serverless environments like Vercel)
+  if (!fileConfig.oauth_refresh_token && !fileConfig.spreadsheet_id && !fileConfig.service_account_private_key) {
+    try {
+      if (fs.existsSync(FALLBACK_CONFIG_PATH)) {
+        const content = fs.readFileSync(FALLBACK_CONFIG_PATH, "utf-8");
+        fileConfig = { ...fileConfig, ...(JSON.parse(content) as DynamicGoogleConfig) };
+      }
+    } catch {
+      // Fallback path unreadable
+    }
+  }
+
+  // 3. Merge with in-memory global cache
+  const memoryConfig = global.__dynamicGoogleConfigCache || {};
+  return {
+    ...fileConfig,
+    ...memoryConfig,
+  };
 }
 
 /**
- * Persists updated Google configuration to disk.
+ * Persists updated Google configuration to disk with Vercel serverless fallback.
  */
 export function saveDynamicGoogleConfig(config: DynamicGoogleConfig): void {
+  const current = getDynamicGoogleConfig();
+  const updated: DynamicGoogleConfig = {
+    ...current,
+    ...config,
+    updated_at: new Date().toISOString(),
+  };
+
+  // Update in-memory cache immediately
+  global.__dynamicGoogleConfigCache = updated;
+
+  let savedToFile = false;
+
+  // 1. Try saving to primary data/ directory
   try {
-    const dir = path.dirname(CONFIG_FILE_PATH);
+    const dir = path.dirname(PRIMARY_CONFIG_PATH);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
+    fs.writeFileSync(PRIMARY_CONFIG_PATH, JSON.stringify(updated, null, 2), "utf-8");
+    savedToFile = true;
+  } catch (primaryErr) {
+    console.warn("Primary config path unwritable (expected on Vercel read-only filesystem):", primaryErr);
+  }
 
-    const current = getDynamicGoogleConfig();
-    const updated: DynamicGoogleConfig = {
-      ...current,
-      ...config,
-      updated_at: new Date().toISOString(),
-    };
-
-    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(updated, null, 2), "utf-8");
-  } catch (error) {
-    console.error("Failed to save dynamic Google config to disk:", error);
-    throw new Error("שגיאה בשמירת הגדרות החיבור לקובץ התצורה");
+  // 2. If primary failed or on serverless, write to os.tmpdir()
+  if (!savedToFile) {
+    try {
+      fs.writeFileSync(FALLBACK_CONFIG_PATH, JSON.stringify(updated, null, 2), "utf-8");
+      savedToFile = true;
+    } catch (fallbackErr) {
+      console.warn("Could not save to os.tmpdir():", fallbackErr);
+    }
   }
 }
+

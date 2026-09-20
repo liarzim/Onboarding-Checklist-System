@@ -17,7 +17,10 @@ export function getGoogleAuth(): any {
     const env = getEnv();
 
     // Check if OAuth mode is active and refresh token is configured
-    if (dynamicConfig.auth_mode === "oauth" && dynamicConfig.oauth_refresh_token) {
+    if (
+      (dynamicConfig.auth_mode === "oauth" && dynamicConfig.oauth_refresh_token) ||
+      (!env.GOOGLE_PRIVATE_KEY && dynamicConfig.oauth_refresh_token)
+    ) {
       const { clientId, clientSecret } = getOAuth2Credentials();
       const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
       oauth2Client.setCredentials({
