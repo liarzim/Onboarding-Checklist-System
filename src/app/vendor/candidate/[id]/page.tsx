@@ -15,6 +15,7 @@ import {
   Folder,
   User,
   ShieldAlert,
+  PenTool,
 } from "lucide-react";
 
 interface CandidateInfo {
@@ -313,6 +314,7 @@ export default function CandidateChecklistPage() {
           {items.map((item, index) => (
             <DocumentRow
               key={item.doc_type_id}
+              candidateId={candidateId}
               item={item}
               index={index + 1}
               isUploading={uploadingDocId === item.doc_type_id}
@@ -326,13 +328,14 @@ export default function CandidateChecklistPage() {
 }
 
 interface DocumentRowProps {
+  candidateId: string;
   item: ChecklistItemDetail;
   index: number;
   isUploading: boolean;
   onUpload: (file: File) => void;
 }
 
-function DocumentRow({ item, index, isUploading, onUpload }: DocumentRowProps) {
+function DocumentRow({ candidateId, item, index, isUploading, onUpload }: DocumentRowProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -444,8 +447,22 @@ function DocumentRow({ item, index, isUploading, onUpload }: DocumentRowProps) {
           </div>
         </div>
 
-        {/* Upload Action Area */}
-        <div className="flex items-center gap-3 self-end md:self-center">
+        {/* Dual Actions: Fill Online Form or Upload Scanned PDF */}
+        <div className="flex flex-wrap items-center gap-2 self-end md:self-center">
+          {/* Digital Interactive Form Link */}
+          <Link
+            href={`/vendor/candidate/${candidateId}/form/${item.doc_type_id}`}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl transition shadow-xs ${
+              isUploaded
+                ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20"
+            }`}
+          >
+            <PenTool className="w-3.5 h-3.5" />
+            <span>{isUploaded ? "מלא מחדש דיגיטלית" : "מלא טופס דיגיטלי"}</span>
+          </Link>
+
+          {/* Hidden File Input for Scanned Upload */}
           <input
             type="file"
             ref={fileInputRef}
@@ -454,25 +471,23 @@ function DocumentRow({ item, index, isUploading, onUpload }: DocumentRowProps) {
             className="hidden"
           />
 
+          {/* Scanned PDF Upload Button */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition shadow-xs disabled:opacity-50 ${
-              isUploaded
-                ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
-                : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20"
-            }`}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition disabled:opacity-50"
+            title="העלאת קובץ סרוק חיצוני"
           >
             {isUploading ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
                 <span>מעלה ל-Drive...</span>
               </>
             ) : (
               <>
-                <Upload className="w-4 h-4" />
-                <span>{isUploaded ? "החלף קובץ (PDF)" : "העלאת מסמך (PDF)"}</span>
+                <Upload className="w-3.5 h-3.5" />
+                <span>{isUploaded ? "החלף קובץ סרוק" : "העלה קובץ סרוק"}</span>
               </>
             )}
           </button>
