@@ -55,8 +55,7 @@ export async function middleware(request: NextRequest) {
         );
       }
 
-      const loginUrl = new URL("/login", request.url);
-      loginUrl.searchParams.set("portal", "admin");
+      const loginUrl = new URL("/", request.url);
       loginUrl.searchParams.set("callbackUrl", pathname);
       return NextResponse.redirect(loginUrl);
     }
@@ -157,8 +156,7 @@ export async function middleware(request: NextRequest) {
 
     if (pathname.startsWith("/vendor")) {
       if (!isVendorValid || !vendorData) {
-        const loginUrl = new URL("/login", request.url);
-        loginUrl.searchParams.set("portal", "vendor");
+        const loginUrl = new URL("/", request.url);
         loginUrl.searchParams.set("callbackUrl", pathname);
         return NextResponse.redirect(loginUrl);
       }

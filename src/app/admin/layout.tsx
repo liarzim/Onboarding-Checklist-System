@@ -8,6 +8,7 @@ import {
   UserCheck,
   Settings,
   FileText,
+  History,
 } from "lucide-react";
 
 export default async function AdminLayout({
@@ -66,6 +67,13 @@ export default async function AdminLayout({
                   >
                     <FileText className="w-4 h-4" />
                     <span>יומן פעולות</span>
+                  </Link>
+                  <Link
+                    href="/admin/versions"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-300 hover:text-white rounded-lg hover:bg-slate-800 transition"
+                  >
+                    <History className="w-4 h-4" />
+                    <span>גרסאות מערכת</span>
                   </Link>
                 </>
               )}

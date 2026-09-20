@@ -9,6 +9,6 @@ export async function POST() {
 export async function GET() {
   clearAdminAuthCookie();
   return NextResponse.redirect(
-    new URL("/admin/login", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
+    new URL("/", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
   );
 }

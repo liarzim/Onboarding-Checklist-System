@@ -11,7 +11,7 @@ function AdminLoginRedirectContent() {
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("portal", "admin");
-    router.replace(`/login?${params.toString()}`);
+    router.replace(`/?${params.toString()}`);
   }, [router, searchParams]);
 
   return (
