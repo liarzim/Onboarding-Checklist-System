@@ -61,7 +61,7 @@ export class SheetsRepository {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${SHEET_NAMES.CANDIDATES}!A2:L`,
+      range: `${SHEET_NAMES.CANDIDATES}!A2:P`,
     });
 
     const rows = response.data.values || [];
@@ -79,6 +79,10 @@ export class SheetsRepository {
       is_completed: String(row[9] ?? "").toUpperCase() === "TRUE",
       created_at: String(row[10] || new Date().toISOString()),
       updated_at: String(row[11] || new Date().toISOString()),
+      access_token: row[12] ? String(row[12]) : null,
+      token_expires_at: row[13] ? String(row[13]) : null,
+      is_signed_by_candidate: String(row[14] ?? "").toUpperCase() === "TRUE",
+      signature_url: row[15] ? String(row[15]) : null,
     }));
 
     return candidates.filter((c) => {
@@ -101,11 +105,107 @@ export class SheetsRepository {
   }
 
   /**
+   * Retrieves a candidate by access_token (or fallback to candidate_id).
+   */
+  async getCandidateByToken(token: string): Promise<Candidate | null> {
+    if (!token) return null;
+    const candidates = await this.getCandidates();
+    return (
+      candidates.find(
+        (c) => c.access_token === token || c.candidate_id === token
+      ) || null
+    );
+  }
+
+  /**
+   * Updates candidate upon digital signing in the candidate portal.
+   */
+  async markCandidateSigned(
+    candidate_id: string,
+    updateData: {
+      full_name?: string;
+      id_number?: string;
+      project_id?: string;
+      signature_url?: string;
+    }
+  ): Promise<void> {
+    const sheets = getSheetsClient();
+    const spreadsheetId = this.getSpreadsheetId();
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SHEET_NAMES.CANDIDATES}!A2:P`,
+    });
+
+    const rows = response.data.values || [];
+    const rowIndex = rows.findIndex((row) => String(row[0] || "") === candidate_id);
+
+    if (rowIndex < 0) {
+      throw new Error(`Candidate with ID "${candidate_id}" was not found in Candidates sheet`);
+    }
+
+    const sheetRowNumber = rowIndex + 2;
+    const now = new Date().toISOString();
+
+    if (updateData.full_name) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CANDIDATES}!B${sheetRowNumber}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [[sanitizeSheetCellValue(updateData.full_name)]] },
+      });
+    }
+
+    if (updateData.id_number) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CANDIDATES}!C${sheetRowNumber}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [[sanitizeSheetCellValue(updateData.id_number)]] },
+      });
+    }
+
+    if (updateData.project_id) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CANDIDATES}!G${sheetRowNumber}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [[sanitizeSheetCellValue(updateData.project_id)]] },
+      });
+    }
+
+    // Advance stage to stage_2, update timestamp, mark signed, and store signature url
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${SHEET_NAMES.CANDIDATES}!I${sheetRowNumber}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [["stage_2"]] },
+    });
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${SHEET_NAMES.CANDIDATES}!L${sheetRowNumber}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [[now]] },
+    });
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${SHEET_NAMES.CANDIDATES}!O${sheetRowNumber}:P${sheetRowNumber}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [["TRUE", updateData.signature_url || ""]] },
+    });
+  }
+
+  /**
    * Creates a new candidate row in the Candidates sheet.
    */
   async createCandidate(candidate: Candidate): Promise<void> {
     const sheets = getSheetsClient();
     const spreadsheetId = this.getSpreadsheetId();
+
+    const accessToken = candidate.access_token || `token_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const tokenExpiresAt = candidate.token_expires_at || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
     const row = [
       sanitizeSheetCellValue(candidate.candidate_id),
@@ -120,11 +220,15 @@ export class SheetsRepository {
       candidate.is_completed ? "TRUE" : "FALSE",
       candidate.created_at,
       candidate.updated_at,
+      accessToken,
+      tokenExpiresAt,
+      candidate.is_signed_by_candidate ? "TRUE" : "FALSE",
+      candidate.signature_url || "",
     ];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: `${SHEET_NAMES.CANDIDATES}!A:L`,
+      range: `${SHEET_NAMES.CANDIDATES}!A:P`,
       valueInputOption: "USER_ENTERED",
       insertDataOption: "INSERT_ROWS",
       requestBody: {

@@ -11,6 +11,10 @@ export const CandidateSchema = z.object({
   drive_folder_id: z.string().min(1),
   current_stage_id: z.string().min(1),
   is_completed: z.boolean().default(false),
+  access_token: z.string().nullable().optional(),
+  token_expires_at: z.string().nullable().optional(),
+  is_signed_by_candidate: z.boolean().default(false).optional(),
+  signature_url: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 });
