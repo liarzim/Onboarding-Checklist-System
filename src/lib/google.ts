@@ -38,6 +38,12 @@ export function getDriveClient(): drive_v3.Drive {
   return driveInstance;
 }
 
+export function resetGoogleClients(): void {
+  authClient = null;
+  sheetsInstance = null;
+  driveInstance = null;
+}
+
 export const sheetsClient = new Proxy({} as sheets_v4.Sheets, {
   get(_target, prop: string | symbol) {
     const client = getSheetsClient();

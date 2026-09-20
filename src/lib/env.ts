@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getDynamicGoogleConfig } from "./dynamicConfig";
 
 export const envSchema = z.object({
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z
@@ -44,12 +45,27 @@ export type Env = z.infer<typeof envSchema>;
 
 let cachedEnv: Env | null = null;
 
+export function resetEnvCache(): void {
+  cachedEnv = null;
+}
+
 export function getEnv(): Env {
   if (cachedEnv) {
     return cachedEnv;
   }
 
-  const result = envSchema.safeParse(process.env);
+  // Merge process.env with any dynamic configuration set through the admin UI
+  const dynamicConfig = getDynamicGoogleConfig();
+
+  const merged = {
+    ...process.env,
+    GOOGLE_SPREADSHEET_ID:
+      dynamicConfig.spreadsheet_id || process.env.GOOGLE_SPREADSHEET_ID || "",
+    GOOGLE_DRIVE_ROOT_FOLDER_ID:
+      dynamicConfig.drive_folder_id || process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "",
+  };
+
+  const result = envSchema.safeParse(merged);
   if (!result.success) {
     const errorDetails = result.error.issues
       .map((issue) => `${issue.path.join(".")}: ${issue.message}`)

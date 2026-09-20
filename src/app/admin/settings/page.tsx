@@ -18,6 +18,13 @@ import {
   ExternalLink,
   ShieldAlert,
   UserPlus,
+  Copy,
+  Check,
+  Cloud,
+  HardDrive,
+  FileSpreadsheet,
+  Play,
+  Info,
 } from "lucide-react";
 import type { SettingStage, DocumentType, Vendor, AdminUser } from "@/types/schema";
 
@@ -44,7 +51,9 @@ const FALLBACK_STAGES: SettingStage[] = [
 const FALLBACK_PROJECTS = ["פרויקט אלפא", "פרויקט סייבר", "פרויקט ענן", "פרויקט תשתיות"];
 
 export default function AdminSettingsPage() {
-  const [activeTab, setActiveTab] = useState<"stages" | "documents" | "vendors" | "projects" | "admins">("stages");
+  const [activeTab, setActiveTab] = useState<
+    "stages" | "documents" | "vendors" | "projects" | "admins" | "google"
+  >("stages");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -75,8 +84,28 @@ export default function AdminSettingsPage() {
   const [newAdminRole, setNewAdminRole] = useState<"Admin" | "HR">("Admin");
   const [newAdminPassword, setNewAdminPassword] = useState("");
 
+  // Google Sheets & Drive Connection State
+  const [googleServiceEmail, setGoogleServiceEmail] = useState("");
+  const [googlePrivateKeyConfigured, setGooglePrivateKeyConfigured] = useState(false);
+  const [googleSpreadsheetId, setGoogleSpreadsheetId] = useState("");
+  const [googleDriveFolderId, setGoogleDriveFolderId] = useState("");
+  const [googleSpreadsheetUrl, setGoogleSpreadsheetUrl] = useState("");
+  const [googleDriveFolderUrl, setGoogleDriveFolderUrl] = useState("");
+  const [copiedEmail, setCopiedEmail] = useState(false);
+  const [testLoading, setTestLoading] = useState(false);
+  const [savingGoogle, setSavingGoogle] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    credentialsOk: boolean;
+    sheetsOk: boolean;
+    sheetsDetails: string;
+    driveOk: boolean;
+    driveDetails: string;
+    overallHealthy: boolean;
+  } | null>(null);
+
   useEffect(() => {
     fetchSettings();
+    fetchGoogleConnection();
   }, []);
 
   async function fetchSettings() {
@@ -123,6 +152,109 @@ export default function AdminSettingsPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // --- GOOGLE CONNECTION HANDLERS ---
+  async function fetchGoogleConnection() {
+    try {
+      const res = await fetch("/api/admin/settings/google-connection");
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setGoogleServiceEmail(json.data.serviceAccountEmail || "");
+        setGooglePrivateKeyConfigured(Boolean(json.data.isPrivateKeyConfigured));
+        setGoogleSpreadsheetId(json.data.spreadsheetId || "");
+        setGoogleDriveFolderId(json.data.driveFolderId || "");
+        setGoogleSpreadsheetUrl(json.data.spreadsheetUrl || "");
+        setGoogleDriveFolderUrl(json.data.driveFolderUrl || "");
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  async function handleSaveGoogleConnection(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingGoogle(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/settings/google-connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          spreadsheetId: googleSpreadsheetId,
+          driveFolderId: googleDriveFolderId,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setMessage({ type: "success", text: json.message });
+        setGoogleSpreadsheetId(json.data.spreadsheetId || "");
+        setGoogleDriveFolderId(json.data.driveFolderId || "");
+        setGoogleSpreadsheetUrl(json.data.spreadsheetUrl || "");
+        setGoogleDriveFolderUrl(json.data.driveFolderUrl || "");
+
+        // Automatically trigger live test after saving
+        await handleTestGoogleConnection(
+          json.data.spreadsheetId,
+          json.data.driveFolderId
+        );
+        // Refresh settings so other tabs update immediately with any sheet data
+        await fetchSettings();
+      } else {
+        setMessage({
+          type: "error",
+          text: json.message || "שגיאה בשמירת הגדרות החיבור ל-Google",
+        });
+      }
+    } catch {
+      setMessage({ type: "error", text: "שגיאת תקשורת בשמירת הגדרות חיבור" });
+    } finally {
+      setSavingGoogle(false);
+    }
+  }
+
+  async function handleTestGoogleConnection(
+    customSpreadsheet?: string,
+    customDrive?: string
+  ) {
+    setTestLoading(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/admin/settings/google-connection/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          spreadsheetId:
+            customSpreadsheet !== undefined
+              ? customSpreadsheet
+              : googleSpreadsheetId,
+          driveFolderId:
+            customDrive !== undefined ? customDrive : googleDriveFolderId,
+        }),
+      });
+      const json = await res.json();
+      if (json.result) {
+        setTestResult(json.result);
+      }
+    } catch {
+      setTestResult({
+        credentialsOk: false,
+        sheetsOk: false,
+        sheetsDetails: "שגיאת תקשורת בעת בדיקת החיבור",
+        driveOk: false,
+        driveDetails: "שגיאת תקשורת בעת בדיקת החיבור",
+        overallHealthy: false,
+      });
+    } finally {
+      setTestLoading(false);
+    }
+  }
+
+  function handleCopyEmail() {
+    if (!googleServiceEmail) return;
+    navigator.clipboard.writeText(googleServiceEmail);
+    setCopiedEmail(true);
+    setTimeout(() => setCopiedEmail(false), 2500);
   }
 
   // --- STAGES HANDLERS ---
@@ -470,6 +602,18 @@ export default function AdminSettingsPage() {
         >
           <ShieldAlert className="w-4 h-4" />
           <span>מנהלי מערכת ({admins.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("google")}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+            activeTab === "google"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+          }`}
+        >
+          <Cloud className="w-4 h-4 text-emerald-600" />
+          <span>חיבור Sheets ו-Drive</span>
         </button>
       </div>
 
@@ -1126,6 +1270,370 @@ export default function AdminSettingsPage() {
                       })}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 6: GOOGLE SHEETS & DRIVE CONNECTION */}
+            {activeTab === "google" && (
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
+                  <div>
+                    <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                      <Cloud className="w-5 h-5 text-emerald-600" />
+                      <span>חיבור ל-Google Sheets ו-Google Drive</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-1">
+                      הגדר את מזהי הגיליון ותיקיית הדרייב הראשיים, העתק את פרטי חשבון השירות ובצע בדיקת תקשורת חיה
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleTestGoogleConnection()}
+                    disabled={testLoading}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition disabled:opacity-50 shadow-sm self-start sm:self-auto"
+                  >
+                    {testLoading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Play className="w-4 h-4" />
+                    )}
+                    <span>{testLoading ? "בודק חיבור עכשיו..." : "בדוק חיבור עכשיו"}</span>
+                  </button>
+                </div>
+
+                {/* DIAGNOSTIC TEST RESULT */}
+                {testResult && (
+                  <div
+                    className={`p-4 rounded-xl border transition-all ${
+                      testResult.overallHealthy
+                        ? "bg-emerald-50/70 border-emerald-200"
+                        : "bg-amber-50/70 border-amber-200"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 mb-3">
+                      {testResult.overallHealthy ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                      )}
+                      <div>
+                        <h4
+                          className={`text-sm font-bold ${
+                            testResult.overallHealthy
+                              ? "text-emerald-900"
+                              : "text-amber-900"
+                          }`}
+                        >
+                          {testResult.overallHealthy
+                            ? "החיבור ל-Google תקין לחלוטין ומוכן לפעילות"
+                            : "נמצאו בעיות בחיבור ל-Google"}
+                        </h4>
+                        <p className="text-xs text-slate-600">
+                          {testResult.overallHealthy
+                            ? "גיליון הניהול ותיקיית הדרייב נגישים לקריאה ולכתיבה מלאה על ידי חשבון השירות."
+                            : "ודא שהזנת מזהים נכונים ושהענקת הרשאת 'עורך' (Editor) לחשבון השירות."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                      {/* Credentials */}
+                      <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-slate-700">חשבון שירות</span>
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              testResult.credentialsOk
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-rose-100 text-rose-800"
+                            }`}
+                          >
+                            {testResult.credentialsOk ? "מאומת" : "שגיאה"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 truncate" title={googleServiceEmail}>
+                          {googleServiceEmail || "לא הוגדר אימייל"}
+                        </p>
+                      </div>
+
+                      {/* Sheets */}
+                      <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Google Sheets</span>
+                          </span>
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              testResult.sheetsOk
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-rose-100 text-rose-800"
+                            }`}
+                          >
+                            {testResult.sheetsOk ? "תקין" : "אין גישה"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600">
+                          {testResult.sheetsDetails}
+                        </p>
+                      </div>
+
+                      {/* Drive */}
+                      <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                            <HardDrive className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Google Drive</span>
+                          </span>
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              testResult.driveOk
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-rose-100 text-rose-800"
+                            }`}
+                          >
+                            {testResult.driveOk ? "תקין (עורך)" : "אין גישה"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600">
+                          {testResult.driveDetails}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* SERVICE ACCOUNT EMAIL CARD */}
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
+                        1
+                      </span>
+                      <h3 className="text-sm font-bold text-slate-800">
+                        חשבון שירות ייעודי (Service Account)
+                      </h3>
+                    </div>
+                    <span
+                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${
+                        googlePrivateKeyConfigured
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-amber-50 text-amber-700 border-amber-200"
+                      }`}
+                    >
+                      {googlePrivateKeyConfigured
+                        ? "מפתח פרטי (Private Key) מוגדר במערכת"
+                        : "מפתח פרטי לא זוהה בשרת"}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-600">
+                    זהו חשבון השירות האוטומטי שמבצע את כל פעולות הקריאה והכתיבה בגיליון ויצירת התיקיות ב-Drive.
+                    יש להעתיק את כתובתו ולשתף עמו את הגיליון ואת התיקייה הראשית בהרשאת <strong className="text-slate-800">עורך (Editor)</strong>.
+                  </p>
+
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        readOnly
+                        value={googleServiceEmail || "טוען כתובת חשבון שירות..."}
+                        dir="ltr"
+                        className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-800 select-all cursor-text focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyEmail}
+                      disabled={!googleServiceEmail}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition shadow-xs disabled:opacity-50"
+                      title="העתק כתובת אימייל"
+                    >
+                      {copiedEmail ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="text-emerald-700 font-bold">הועתק!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-slate-600" />
+                          <span>העתק אימייל</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* CONNECTION FORM CARD */}
+                <form
+                  onSubmit={handleSaveGoogleConnection}
+                  className="p-4 bg-white rounded-xl border border-slate-200 space-y-4 shadow-xs"
+                >
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
+                      2
+                    </span>
+                    <h3 className="text-sm font-bold text-slate-800">
+                      הגדרת מזהי הגיליון והתיקייה הראשית
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* SPREADSHEET ID FIELD */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Google Spreadsheet ID או קישור:</span>
+                        </label>
+                        {googleSpreadsheetUrl && (
+                          <a
+                            href={googleSpreadsheetUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:underline"
+                          >
+                            <span>פתח גיליון</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={googleSpreadsheetId}
+                        onChange={(e) => setGoogleSpreadsheetId(e.target.value)}
+                        placeholder="הדבק מזהה או קישור: https://docs.google.com/spreadsheets/d/.../edit"
+                        className="w-full text-xs font-mono border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <p className="text-[11px] text-slate-500">
+                        ניתן להדביק את המזהה ישירות או את הקישור המלא משורת הכתובת. המערכת מחלצת את המזהה אוטומטית.
+                      </p>
+                    </div>
+
+                    {/* DRIVE FOLDER ID FIELD */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <HardDrive className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Google Drive Root Folder ID או קישור:</span>
+                        </label>
+                        {googleDriveFolderUrl && (
+                          <a
+                            href={googleDriveFolderUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:underline"
+                          >
+                            <span>פתח תיקייה בדרייב</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={googleDriveFolderId}
+                        onChange={(e) => setGoogleDriveFolderId(e.target.value)}
+                        placeholder="הדבק מזהה או קישור: https://drive.google.com/drive/folders/..."
+                        className="w-full text-xs font-mono border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <p className="text-[11px] text-slate-500">
+                        המערכת תייצר תחת תיקייה זו תיקיות ייעודיות לכל מועמד עבור העלאת מסמכים חתומים.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => handleTestGoogleConnection()}
+                      disabled={testLoading}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition disabled:opacity-50"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      <span>{testLoading ? "בודק..." : "בדוק נתונים אלו"}</span>
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingGoogle}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition disabled:opacity-50 shadow-sm"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{savingGoogle ? "שומר ומאמת..." : "שמור שינויים והחל"}</span>
+                    </button>
+                  </div>
+                </form>
+
+                {/* INSTRUCTIONS CARD */}
+                <div className="p-5 bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-xl border border-slate-200 space-y-4">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                      3
+                    </span>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800">
+                        הוראות שיתוף ה-Spreadsheet ותיקיית ה-Drive
+                      </h3>
+                      <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 mt-2 font-medium">
+                        חשוב מאוד להעניק ל-Service Account הרשאות עריכה כדי שהמערכת תפעל:
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                    {/* SPREADSHEET STEPS */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-2.5">
+                      <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                        <h4 className="text-xs font-bold text-slate-800">Google Spreadsheet:</h4>
+                      </div>
+                      <ol className="list-decimal list-inside space-y-2 text-xs text-slate-600">
+                        <li className="leading-relaxed">פתח את הגיליון ב-Google Sheets.</li>
+                        <li className="leading-relaxed">
+                          לחץ על שתף (Share) בפינה העליונה.
+                        </li>
+                        <li className="leading-relaxed">
+                          הדבק את כתובת האימייל של ה-Service Account (הערך של client_email שמופיע בסעיף 1 לעיל).
+                        </li>
+                        <li className="leading-relaxed">
+                          הגדר הרשאת עורך (Editor) והסר את הסימון מ-Notify people.
+                        </li>
+                        <li className="leading-relaxed">
+                          העתק את ה-Spreadsheet ID משורת הכתובת בדפדפן:
+                          <div className="mt-1 p-1.5 bg-slate-50 rounded border border-slate-200 font-mono text-[10px] text-slate-700 break-all" dir="ltr">
+                            https://docs.google.com/spreadsheets/d/&lt;SPREADSHEET_ID&gt;/edit
+                          </div>
+                        </li>
+                      </ol>
+                    </div>
+
+                    {/* DRIVE FOLDER STEPS */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-2.5">
+                      <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                        <HardDrive className="w-4 h-4 text-blue-600" />
+                        <h4 className="text-xs font-bold text-slate-800">Google Drive Root Folder:</h4>
+                      </div>
+                      <ol className="list-decimal list-inside space-y-2 text-xs text-slate-600">
+                        <li className="leading-relaxed">
+                          פתח את Google Drive וצור תיקייה ראשית (לדוגמה: Onboarding_System_Root).
+                        </li>
+                        <li className="leading-relaxed">
+                          לחץ קליק ימני על התיקייה -&gt; שיתוף (Share).
+                        </li>
+                        <li className="leading-relaxed">
+                          הוסף את ה-Service Account כ-עורך (Editor) והסר את הסימון מ-Notify people.
+                        </li>
+                        <li className="leading-relaxed">
+                          העתק את ה-Folder ID משורת הכתובת:
+                          <div className="mt-1 p-1.5 bg-slate-50 rounded border border-slate-200 font-mono text-[10px] text-slate-700 break-all" dir="ltr">
+                            https://drive.google.com/drive/folders/&lt;FOLDER_ID&gt;
+                          </div>
+                        </li>
+                      </ol>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
