@@ -2,12 +2,55 @@ import fs from "fs";
 import path from "path";
 
 export interface DynamicGoogleConfig {
+  auth_mode?: "service_account" | "oauth";
+  service_account_email?: string;
+  service_account_private_key?: string;
+  oauth_refresh_token?: string;
+  oauth_email?: string;
   spreadsheet_id?: string;
   drive_folder_id?: string;
   updated_at?: string;
 }
 
 const CONFIG_FILE_PATH = path.join(process.cwd(), "data", "google-config.json");
+
+/**
+ * Parses Google Cloud Service Account JSON and extracts client_email and private_key.
+ */
+export function parseServiceAccountJson(jsonString: string): {
+  clientEmail: string;
+  privateKey: string;
+  projectId?: string;
+} {
+  const trimmed = (jsonString || "").trim();
+  if (!trimmed) {
+    throw new Error("תוכן ה-JSON ריק");
+  }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    throw new Error("קובץ ה-JSON אינו תקין מבחינה תחבירית");
+  }
+
+  const clientEmail = String(parsed.client_email || "").trim();
+  let privateKey = String(parsed.private_key || "").trim();
+
+  if (!clientEmail || !clientEmail.includes("@")) {
+    throw new Error("לא נמצא שדה client_email תקין ב-JSON");
+  }
+
+  if (!privateKey || !privateKey.includes("PRIVATE KEY")) {
+    throw new Error("לא נמצא שדה private_key תקין ב-JSON");
+  }
+
+  return {
+    clientEmail,
+    privateKey,
+    projectId: parsed.project_id ? String(parsed.project_id).trim() : undefined,
+  };
+}
 
 /**
  * Extracts Google Spreadsheet ID from raw ID or full Google Sheets URL.

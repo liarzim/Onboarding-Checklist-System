@@ -25,6 +25,12 @@ import {
   FileSpreadsheet,
   Play,
   Info,
+  Sparkles,
+  KeyRound,
+  UploadCloud,
+  FileJson,
+  FileCode,
+  Unlink,
 } from "lucide-react";
 import type { SettingStage, DocumentType, Vendor, AdminUser } from "@/types/schema";
 
@@ -85,8 +91,11 @@ export default function AdminSettingsPage() {
   const [newAdminPassword, setNewAdminPassword] = useState("");
 
   // Google Sheets & Drive Connection State
+  const [googleAuthMode, setGoogleAuthMode] = useState<"service_account" | "oauth">("service_account");
   const [googleServiceEmail, setGoogleServiceEmail] = useState("");
   const [googlePrivateKeyConfigured, setGooglePrivateKeyConfigured] = useState(false);
+  const [isOauthConnected, setIsOauthConnected] = useState(false);
+  const [oauthEmail, setOauthEmail] = useState("");
   const [googleSpreadsheetId, setGoogleSpreadsheetId] = useState("");
   const [googleDriveFolderId, setGoogleDriveFolderId] = useState("");
   const [googleSpreadsheetUrl, setGoogleSpreadsheetUrl] = useState("");
@@ -94,6 +103,16 @@ export default function AdminSettingsPage() {
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
   const [savingGoogle, setSavingGoogle] = useState(false);
+
+  // Service Account JSON form state
+  const [showJsonForm, setShowJsonForm] = useState(false);
+  const [serviceAccountJson, setServiceAccountJson] = useState("");
+  const [savingJson, setSavingJson] = useState(false);
+
+  // Auto Create Resources state
+  const [autoCreateLoading, setAutoCreateLoading] = useState(false);
+  const [autoCreateShareEmail, setAutoCreateShareEmail] = useState("");
+
   const [testResult, setTestResult] = useState<{
     credentialsOk: boolean;
     sheetsOk: boolean;
@@ -106,6 +125,22 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     fetchSettings();
     fetchGoogleConnection();
+
+    // Check URL query parameters for Google OAuth callback status
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const gSuccess = params.get("googleSuccess");
+      const gError = params.get("googleError");
+      if (gSuccess) {
+        setActiveTab("google");
+        setMessage({ type: "success", text: gSuccess });
+        window.history.replaceState({}, "", "/admin/settings");
+      } else if (gError) {
+        setActiveTab("google");
+        setMessage({ type: "error", text: gError });
+        window.history.replaceState({}, "", "/admin/settings");
+      }
+    }
   }, []);
 
   async function fetchSettings() {
@@ -160,8 +195,11 @@ export default function AdminSettingsPage() {
       const res = await fetch("/api/admin/settings/google-connection");
       const json = await res.json();
       if (res.ok && json.success) {
+        setGoogleAuthMode(json.data.authMode || "service_account");
         setGoogleServiceEmail(json.data.serviceAccountEmail || "");
         setGooglePrivateKeyConfigured(Boolean(json.data.isPrivateKeyConfigured));
+        setIsOauthConnected(Boolean(json.data.isOauthConnected));
+        setOauthEmail(json.data.oauthEmail || "");
         setGoogleSpreadsheetId(json.data.spreadsheetId || "");
         setGoogleDriveFolderId(json.data.driveFolderId || "");
         setGoogleSpreadsheetUrl(json.data.spreadsheetUrl || "");
@@ -169,6 +207,112 @@ export default function AdminSettingsPage() {
       }
     } catch {
       // Ignore
+    }
+  }
+
+  async function handleSaveServiceAccountJson(e: React.FormEvent) {
+    e.preventDefault();
+    if (!serviceAccountJson.trim()) return;
+    setSavingJson(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/settings/google-connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serviceAccountJson: serviceAccountJson.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setMessage({
+          type: "success",
+          text: "מפתח חשבון שירות (Service Account) נשמר ואומת בהצלחה!",
+        });
+        setGoogleServiceEmail(json.data.serviceAccountEmail || "");
+        setGooglePrivateKeyConfigured(Boolean(json.data.isPrivateKeyConfigured));
+        setGoogleAuthMode("service_account");
+        setServiceAccountJson("");
+        setShowJsonForm(false);
+        await handleTestGoogleConnection();
+      } else {
+        setMessage({
+          type: "error",
+          text: json.message || "שגיאה בפענוח קובץ ה-JSON של חשבון השירות",
+        });
+      }
+    } catch {
+      setMessage({ type: "error", text: "שגיאת תקשורת בשמירת קובץ ה-JSON" });
+    } finally {
+      setSavingJson(false);
+    }
+  }
+
+  async function handleAutoCreateResources() {
+    setAutoCreateLoading(true);
+    setMessage(null);
+    try {
+      const res = await fetch(
+        "/api/admin/settings/google-connection/create-resources",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shareWithEmail: autoCreateShareEmail || undefined,
+          }),
+        }
+      );
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setMessage({ type: "success", text: json.message });
+        setGoogleSpreadsheetId(json.data.spreadsheetId || "");
+        setGoogleDriveFolderId(json.data.driveFolderId || "");
+        setGoogleSpreadsheetUrl(json.data.spreadsheetUrl || "");
+        setGoogleDriveFolderUrl(json.data.driveFolderUrl || "");
+
+        // Immediately test the newly created resources
+        await handleTestGoogleConnection(
+          json.data.spreadsheetId,
+          json.data.driveFolderId
+        );
+        // Refresh all settings tabs so newly populated data appears immediately
+        await fetchSettings();
+      } else {
+        setMessage({
+          type: "error",
+          text: json.message || "שגיאה ביצירת הגיליון והתיקייה האוטומטית",
+        });
+      }
+    } catch {
+      setMessage({
+        type: "error",
+        text: "שגיאת תקשורת בעת יצירת המשאבים ב-Google",
+      });
+    } finally {
+      setAutoCreateLoading(false);
+    }
+  }
+
+  async function handleDisconnectOauth() {
+    if (!confirm("האם אתה בטוח שברצונך לנתק את חשבון Google של האדמין?")) {
+      return;
+    }
+    try {
+      const res = await fetch("/api/admin/settings/google-connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ disconnectOauth: true }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setIsOauthConnected(false);
+        setOauthEmail("");
+        setGoogleAuthMode("service_account");
+        setMessage({ type: "success", text: "חשבון Google נותק בהצלחה" });
+        await fetchGoogleConnection();
+      }
+    } catch {
+      setMessage({ type: "error", text: "שגיאה בניתוק חשבון Google" });
     }
   }
 
@@ -1277,6 +1421,7 @@ export default function AdminSettingsPage() {
             {/* TAB 6: GOOGLE SHEETS & DRIVE CONNECTION */}
             {activeTab === "google" && (
               <div className="space-y-6">
+                {/* TAB HEADER */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
                   <div>
                     <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
@@ -1284,7 +1429,7 @@ export default function AdminSettingsPage() {
                       <span>חיבור ל-Google Sheets ו-Google Drive</span>
                     </h2>
                     <p className="text-xs text-slate-500 mt-1">
-                      הגדר את מזהי הגיליון ותיקיית הדרייב הראשיים, העתק את פרטי חשבון השירות ובצע בדיקת תקשורת חיה
+                      בחר את החשבון המבוקש לחיבור, צור את הגיליון והתיקייה באופן אוטומטי ובדוק את התקשורת בזמן אמת
                     </p>
                   </div>
                   <button
@@ -1331,8 +1476,8 @@ export default function AdminSettingsPage() {
                         </h4>
                         <p className="text-xs text-slate-600">
                           {testResult.overallHealthy
-                            ? "גיליון הניהול ותיקיית הדרייב נגישים לקריאה ולכתיבה מלאה על ידי חשבון השירות."
-                            : "ודא שהזנת מזהים נכונים ושהענקת הרשאת 'עורך' (Editor) לחשבון השירות."}
+                            ? "גיליון הניהול ותיקיית הדרייב נגישים לקריאה ולכתיבה מלאה על ידי החשבון המחובר."
+                            : "ודא שהחשבון מחובר, שהמזהים נכונים ושהוענקו הרשאות עריכה."}
                         </p>
                       </div>
                     </div>
@@ -1341,7 +1486,7 @@ export default function AdminSettingsPage() {
                       {/* Credentials */}
                       <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-semibold text-slate-700">חשבון שירות</span>
+                          <span className="text-xs font-semibold text-slate-700">אימות חשבון</span>
                           <span
                             className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                               testResult.credentialsOk
@@ -1352,8 +1497,17 @@ export default function AdminSettingsPage() {
                             {testResult.credentialsOk ? "מאומת" : "שגיאה"}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-500 truncate" title={googleServiceEmail}>
-                          {googleServiceEmail || "לא הוגדר אימייל"}
+                        <p
+                          className="text-[11px] text-slate-500 truncate"
+                          title={
+                            isOauthConnected
+                              ? oauthEmail
+                              : googleServiceEmail || "לא הוגדר אימייל"
+                          }
+                        >
+                          {isOauthConnected
+                            ? `OAuth: ${oauthEmail}`
+                            : googleServiceEmail || "לא הוגדר חשבון"}
                         </p>
                       </div>
 
@@ -1404,79 +1558,311 @@ export default function AdminSettingsPage() {
                   </div>
                 )}
 
-                {/* SERVICE ACCOUNT EMAIL CARD */}
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                  <div className="flex items-center justify-between">
+                {/* CARD 1: ACCOUNT CONNECTION CHOICE */}
+                <div className="p-5 bg-white rounded-xl border border-slate-200 space-y-4 shadow-xs">
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
+                      1
+                    </span>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <KeyRound className="w-4 h-4 text-blue-600" />
+                        <span>חשבון Google לחיבור המערכת</span>
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        בחר כיצד לחבר את המערכת: חיבור ישיר לחשבון Google של האדמין, או חיבור מפתח שירות (Service Account JSON)
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* OPTION A: OAUTH */}
+                    <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <Cloud className="w-4 h-4 text-blue-600" />
+                            <span>חיבור חשבון Google של האדמין (OAuth)</span>
+                          </h4>
+                          {isOauthConnected ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <Check className="w-3 h-3" />
+                              <span>מחובר</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
+                              לא מחובר
+                            </span>
+                          )}
+                        </div>
+
+                        {isOauthConnected ? (
+                          <div className="space-y-1.5">
+                            <p className="text-xs text-slate-600">
+                              המערכת מחוברת לחשבון Google של האדמין ומורשית לנהל קבצים וגיליונות ב-Drive:
+                            </p>
+                            <p className="text-xs font-mono font-bold text-blue-700 bg-white p-2 rounded border border-slate-200 truncate">
+                              {oauthEmail}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            התחבר עם חשבון Google האישי או הארגוני שלך בלחיצת כפתור אחת. הגיליונות והקבצים ייווצרו ישירות בתוך ה-Drive שלך.
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="pt-2 flex items-center gap-2">
+                        {isOauthConnected ? (
+                          <button
+                            type="button"
+                            onClick={handleDisconnectOauth}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition border border-rose-200"
+                          >
+                            <Unlink className="w-3.5 h-3.5" />
+                            <span>נתק חשבון Google</span>
+                          </button>
+                        ) : (
+                          <a
+                            href="/api/auth/google/connect-drive"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-sm"
+                          >
+                            <Cloud className="w-3.5 h-3.5" />
+                            <span>חבר חשבון Google של האדמין (Drive + Sheets)</span>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* OPTION B: SERVICE ACCOUNT */}
+                    <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <FileJson className="w-4 h-4 text-emerald-600" />
+                            <span>חשבון שירות ייעודי (Service Account JSON)</span>
+                          </h4>
+                          {googlePrivateKeyConfigured ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <Check className="w-3 h-3" />
+                              <span>מפתח פעיל</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                              חסר מפתח פרטי
+                            </span>
+                          )}
+                        </div>
+
+                        {googlePrivateKeyConfigured ? (
+                          <div className="space-y-1.5">
+                            <p className="text-xs text-slate-600">
+                              כתובת חשבון השירות המוגדרת במערכת:
+                            </p>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                readOnly
+                                value={googleServiceEmail || ""}
+                                dir="ltr"
+                                className="w-full text-[11px] font-mono bg-white border border-slate-200 rounded px-2.5 py-1.5 text-slate-700 select-all"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleCopyEmail}
+                                className="p-1.5 bg-white border border-slate-200 rounded hover:bg-slate-100 transition"
+                                title="העתק אימייל"
+                              >
+                                {copiedEmail ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5 text-slate-600" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            אם ברשותך קובץ JSON של חשבון שירות מ-Google Cloud Console, ניתן להדביקו כאן לאימות מיידי ללא הגדרת משתני שרת.
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="pt-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowJsonForm(!showJsonForm)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition shadow-xs"
+                        >
+                          <FileJson className="w-3.5 h-3.5 text-slate-600" />
+                          <span>{showJsonForm ? "סגור חלון הזנה" : "הדבק / עדכן קובץ JSON"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* INLINE SERVICE ACCOUNT JSON FORM */}
+                  {showJsonForm && (
+                    <form
+                      onSubmit={handleSaveServiceAccountJson}
+                      className="p-4 bg-slate-50 rounded-xl border border-blue-200 space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <FileCode className="w-4 h-4 text-blue-600" />
+                          <span>הדבק כאן את תוכן קובץ ה-JSON מחשבון השירות:</span>
+                        </label>
+                        <span className="text-[11px] text-slate-500 font-mono">
+                          (client_email &amp; private_key)
+                        </span>
+                      </div>
+                      <textarea
+                        rows={6}
+                        dir="ltr"
+                        value={serviceAccountJson}
+                        onChange={(e) => setServiceAccountJson(e.target.value)}
+                        placeholder='{"type": "service_account", "project_id": "...", "private_key": "-----BEGIN PRIVATE KEY-----\n...", "client_email": "..."}'
+                        className="w-full text-xs font-mono p-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowJsonForm(false)}
+                          className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-200 rounded-lg transition"
+                        >
+                          ביטול
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={savingJson || !serviceAccountJson.trim()}
+                          className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition disabled:opacity-50 shadow-sm"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          <span>{savingJson ? "מאמת ושומר..." : "אמת ושמור מפתח"}</span>
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+
+                {/* CARD 2: ONE-CLICK AUTOMATIC SETUP */}
+                <div className="p-5 bg-gradient-to-br from-blue-50/50 via-white to-emerald-50/40 rounded-xl border-2 border-blue-300 shadow-sm space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-blue-100">
                     <div className="flex items-center gap-2">
                       <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
-                        1
+                        2
                       </span>
-                      <h3 className="text-sm font-bold text-slate-800">
-                        חשבון שירות ייעודי (Service Account)
+                      <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-amber-500" />
+                        <span>הקמת הגיליון והתיקייה באופן אוטומטי בחשבון המחובר</span>
                       </h3>
                     </div>
-                    <span
-                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${
-                        googlePrivateKeyConfigured
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-amber-50 text-amber-700 border-amber-200"
-                      }`}
-                    >
-                      {googlePrivateKeyConfigured
-                        ? "מפתח פרטי (Private Key) מוגדר במערכת"
-                        : "מפתח פרטי לא זוהה בשרת"}
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 self-start sm:self-auto">
+                      מומלץ ומהיר בלחיצה אחת
                     </span>
                   </div>
 
-                  <p className="text-xs text-slate-600">
-                    זהו חשבון השירות האוטומטי שמבצע את כל פעולות הקריאה והכתיבה בגיליון ויצירת התיקיות ב-Drive.
-                    יש להעתיק את כתובתו ולשתף עמו את הגיליון ואת התיקייה הראשית בהרשאת <strong className="text-slate-800">עורך (Editor)</strong>.
+                  <p className="text-xs text-slate-700 leading-relaxed">
+                    המערכת תייצר עבורך באופן מיידי בתוך חשבון ה-Google המחובר: תיקייה ראשית ב-Drive, גיליון נתונים ב-Sheets עם כל 8 הטאבים הנדרשים (Candidates, ChecklistItems, DocumentTypes, SettingStages, Vendors, Projects, Admins, AuditLogs), עמודות הכותרת, שלבי התהליך, רשימת הטפסים והפרויקטים, ותחבר אותם ישירות למערכת.
                   </p>
 
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end bg-white p-4 rounded-xl border border-blue-200">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700">
+                        כתובת אימייל לשיתוף (הזן את המייל שלך לקבלת הרשאות עריכה):
+                      </label>
                       <input
-                        type="text"
-                        readOnly
-                        value={googleServiceEmail || "טוען כתובת חשבון שירות..."}
+                        type="email"
                         dir="ltr"
-                        className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-800 select-all cursor-text focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        value={autoCreateShareEmail}
+                        onChange={(e) => setAutoCreateShareEmail(e.target.value)}
+                        placeholder="your-name@gmail.com"
+                        className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
+                      <p className="text-[11px] text-slate-500">
+                        התיקייה והגיליון ישותפו עם כתובת זו כ-עורך (Editor) כך שתוכל לצפות ולערוך אותם בנוחות.
+                      </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleCopyEmail}
-                      disabled={!googleServiceEmail}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition shadow-xs disabled:opacity-50"
-                      title="העתק כתובת אימייל"
-                    >
-                      {copiedEmail ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          <span className="text-emerald-700 font-bold">הועתק!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5 text-slate-600" />
-                          <span>העתק אימייל</span>
-                        </>
-                      )}
-                    </button>
+
+                    <div className="flex items-center justify-end">
+                      <button
+                        type="button"
+                        onClick={handleAutoCreateResources}
+                        disabled={autoCreateLoading}
+                        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg transition shadow-md disabled:opacity-50"
+                      >
+                        {autoCreateLoading ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>מקים תיקייה ומסד נתונים ב-Google...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 text-amber-300" />
+                            <span>צור גיליון ותיקייה אוטומטית עכשיו</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
+
+                  {/* ACTIVE RESOURCES DISPLAY */}
+                  {(googleSpreadsheetUrl || googleDriveFolderUrl) && (
+                    <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        <span className="font-semibold text-emerald-900">
+                          משאבי המערכת מחוברים ופעילים:
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {googleSpreadsheetUrl && (
+                          <a
+                            href={googleSpreadsheetUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 font-bold text-emerald-700 hover:underline"
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5" />
+                            <span>פתח גיליון Sheets</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                        {googleDriveFolderUrl && (
+                          <a
+                            href={googleDriveFolderUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 font-bold text-blue-700 hover:underline"
+                          >
+                            <HardDrive className="w-3.5 h-3.5" />
+                            <span>פתח תיקיית Drive</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* CONNECTION FORM CARD */}
+                {/* CARD 3: MANUAL IDENTIFIERS FORM */}
                 <form
                   onSubmit={handleSaveGoogleConnection}
                   className="p-4 bg-white rounded-xl border border-slate-200 space-y-4 shadow-xs"
                 >
-                  <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
-                      2
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-slate-400 text-white flex items-center justify-center text-xs font-bold">
+                        3
+                      </span>
+                      <h3 className="text-sm font-bold text-slate-800">
+                        הגדרת מזהים ידנית (אופציונלי למשתמשים קיימים)
+                      </h3>
+                    </div>
+                    <span className="text-[11px] text-slate-400">
+                      למי שכבר יצר גיליון או תיקייה ידנית
                     </span>
-                    <h3 className="text-sm font-bold text-slate-800">
-                      הגדרת מזהי הגיליון והתיקייה הראשית
-                    </h3>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1508,7 +1894,7 @@ export default function AdminSettingsPage() {
                         className="w-full text-xs font-mono border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <p className="text-[11px] text-slate-500">
-                        ניתן להדביק את המזהה ישירות או את הקישור המלא משורת הכתובת. המערכת מחלצת את המזהה אוטומטית.
+                        ניתן להדביק את המזהה ישירות או את הקישור המלא משורת הכתובת בדפדפן.
                       </p>
                     </div>
 
@@ -1566,15 +1952,15 @@ export default function AdminSettingsPage() {
                   </div>
                 </form>
 
-                {/* INSTRUCTIONS CARD */}
+                {/* CARD 4: MANUAL INSTRUCTIONS FOR REFERENCE */}
                 <div className="p-5 bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-xl border border-slate-200 space-y-4">
                   <div className="flex items-start gap-2.5">
-                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
-                      3
+                    <span className="w-6 h-6 rounded-full bg-slate-400 text-white flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                      4
                     </span>
                     <div>
                       <h3 className="text-sm font-bold text-slate-800">
-                        הוראות שיתוף ה-Spreadsheet ותיקיית ה-Drive
+                        הוראות שיתוף ידניות (עבור חשבון שירות Service Account)
                       </h3>
                       <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 mt-2 font-medium">
                         חשוב מאוד להעניק ל-Service Account הרשאות עריכה כדי שהמערכת תפעל:

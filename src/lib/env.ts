@@ -59,6 +59,14 @@ export function getEnv(): Env {
 
   const merged = {
     ...process.env,
+    GOOGLE_SERVICE_ACCOUNT_EMAIL:
+      dynamicConfig.service_account_email ||
+      process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+      "",
+    GOOGLE_PRIVATE_KEY:
+      dynamicConfig.service_account_private_key ||
+      process.env.GOOGLE_PRIVATE_KEY ||
+      "",
     GOOGLE_SPREADSHEET_ID:
       dynamicConfig.spreadsheet_id || process.env.GOOGLE_SPREADSHEET_ID || "",
     GOOGLE_DRIVE_ROOT_FOLDER_ID:

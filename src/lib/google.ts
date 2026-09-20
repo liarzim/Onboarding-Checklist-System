@@ -1,18 +1,33 @@
 import { google, sheets_v4, drive_v3 } from "googleapis";
 import { getEnv } from "./env";
+import { getDynamicGoogleConfig } from "./dynamicConfig";
 
 const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/drive",
 ];
 
-let authClient: InstanceType<typeof google.auth.JWT> | null = null;
+let authClient: any = null;
 let sheetsInstance: sheets_v4.Sheets | null = null;
 let driveInstance: drive_v3.Drive | null = null;
 
-export function getGoogleAuth(): InstanceType<typeof google.auth.JWT> {
+export function getGoogleAuth(): any {
   if (!authClient) {
+    const dynamicConfig = getDynamicGoogleConfig();
     const env = getEnv();
+
+    // Check if OAuth mode is active and refresh token is configured
+    if (dynamicConfig.auth_mode === "oauth" && dynamicConfig.oauth_refresh_token) {
+      const { clientId, clientSecret } = getOAuth2Credentials();
+      const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+      oauth2Client.setCredentials({
+        refresh_token: dynamicConfig.oauth_refresh_token,
+      });
+      authClient = oauth2Client;
+      return authClient;
+    }
+
+    // Default: Service Account JWT
     authClient = new google.auth.JWT({
       email: env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
       key: env.GOOGLE_PRIVATE_KEY,
@@ -124,6 +139,36 @@ export async function verifyGoogleOAuthCode(code: string, redirectUri?: string) 
     email: data.email || "",
     name: data.name || "",
     picture: data.picture || "",
+  };
+}
+
+export function getGoogleDriveConnectUrl(redirectUri?: string): string {
+  const oauth2Client = getOAuth2Client(redirectUri);
+  return oauth2Client.generateAuthUrl({
+    access_type: "offline",
+    prompt: "consent",
+    scope: [
+      "https://www.googleapis.com/auth/userinfo.profile",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive",
+    ],
+  });
+}
+
+export async function exchangeCodeForDriveTokens(code: string, redirectUri?: string) {
+  const oauth2Client = getOAuth2Client(redirectUri);
+  const { tokens } = await oauth2Client.getToken(code);
+  oauth2Client.setCredentials(tokens);
+
+  const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
+  const { data } = await oauth2.userinfo.get();
+
+  return {
+    email: data.email || "",
+    name: data.name || "",
+    refreshToken: tokens.refresh_token || "",
+    accessToken: tokens.access_token || "",
   };
 }
 
