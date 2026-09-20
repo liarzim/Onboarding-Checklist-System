@@ -31,6 +31,9 @@ import {
   FileJson,
   FileCode,
   Unlink,
+  ChevronDown,
+  ChevronUp,
+  FolderPlus,
 } from "lucide-react";
 import type { SettingStage, DocumentType, Vendor, AdminUser } from "@/types/schema";
 
@@ -112,6 +115,14 @@ export default function AdminSettingsPage() {
   // Auto Create Resources state
   const [autoCreateLoading, setAutoCreateLoading] = useState(false);
   const [autoCreateShareEmail, setAutoCreateShareEmail] = useState("");
+  const [parentFolderMode, setParentFolderMode] = useState<"root" | "existing">("root");
+  const [parentFolderId, setParentFolderId] = useState("");
+  const [sheetPlacement, setSheetPlacement] = useState<"inside_folder" | "same_level">("inside_folder");
+  const [customFolderName, setCustomFolderName] = useState("מערכת Onboarding - תיקיית קליטה ראשית");
+  const [customSheetName, setCustomSheetName] = useState("מערכת קליטת מועמדים - נתוני Onboarding");
+  const [driveFoldersList, setDriveFoldersList] = useState<{ id: string; name: string }[]>([]);
+  const [loadingDriveFolders, setLoadingDriveFolders] = useState(false);
+  const [showLocationSettings, setShowLocationSettings] = useState(false);
 
   const [testResult, setTestResult] = useState<{
     credentialsOk: boolean;
@@ -248,6 +259,21 @@ export default function AdminSettingsPage() {
     }
   }
 
+  async function fetchDriveFolders() {
+    setLoadingDriveFolders(true);
+    try {
+      const res = await fetch("/api/admin/settings/google-connection/drive-folders");
+      const json = await res.json();
+      if (res.ok && json.success && Array.isArray(json.folders)) {
+        setDriveFoldersList(json.folders);
+      }
+    } catch {
+      // Ignore
+    } finally {
+      setLoadingDriveFolders(false);
+    }
+  }
+
   async function handleAutoCreateResources() {
     setAutoCreateLoading(true);
     setMessage(null);
@@ -259,6 +285,10 @@ export default function AdminSettingsPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             shareWithEmail: autoCreateShareEmail || undefined,
+            folderName: customFolderName || undefined,
+            spreadsheetTitle: customSheetName || undefined,
+            parentFolderId: parentFolderMode === "existing" ? parentFolderId : undefined,
+            sheetPlacement: sheetPlacement,
           }),
         }
       );
@@ -1746,7 +1776,7 @@ export default function AdminSettingsPage() {
                   )}
                 </div>
 
-                {/* CARD 2: ONE-CLICK AUTOMATIC SETUP */}
+                {/* CARD 2: ONE-CLICK AUTOMATIC SETUP WITH LOCATION OPTIONS */}
                 <div className="p-5 bg-gradient-to-br from-blue-50/50 via-white to-emerald-50/40 rounded-xl border-2 border-blue-300 shadow-sm space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-blue-100">
                     <div className="flex items-center gap-2">
@@ -1767,43 +1797,216 @@ export default function AdminSettingsPage() {
                     המערכת תייצר עבורך באופן מיידי בתוך חשבון ה-Google המחובר: תיקייה ראשית ב-Drive, גיליון נתונים ב-Sheets עם כל 8 הטאבים הנדרשים (Candidates, ChecklistItems, DocumentTypes, SettingStages, Vendors, Projects, Admins, AuditLogs), עמודות הכותרת, שלבי התהליך, רשימת הטפסים והפרויקטים, ותחבר אותם ישירות למערכת.
                   </p>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end bg-white p-4 rounded-xl border border-blue-200">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">
-                        כתובת אימייל לשיתוף (הזן את המייל שלך לקבלת הרשאות עריכה):
-                      </label>
-                      <input
-                        type="email"
-                        dir="ltr"
-                        value={autoCreateShareEmail}
-                        onChange={(e) => setAutoCreateShareEmail(e.target.value)}
-                        placeholder="your-name@gmail.com"
-                        className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <p className="text-[11px] text-slate-500">
-                        התיקייה והגיליון ישותפו עם כתובת זו כ-עורך (Editor) כך שתוכל לצפות ולערוך אותם בנוחות.
-                      </p>
+                  {/* LOCATION SELECTION CONTROLS */}
+                  <div className="bg-white p-4 rounded-xl border border-blue-200 space-y-4">
+                    <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 pb-2 border-b border-slate-100">
+                      <FolderPlus className="w-4 h-4 text-blue-600" />
+                      <span>בחירת מיקום פתיחת התיקייה הראשית והגיליון ב-Google Drive:</span>
+                    </h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* FOLDER LOCATION */}
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <HardDrive className="w-3.5 h-3.5 text-blue-600" />
+                          <span>היכן לפתוח את התיקייה הראשית?</span>
+                        </label>
+                        <div className="space-y-1.5">
+                          <label className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition text-xs hover:bg-slate-50 border-slate-200">
+                            <input
+                              type="radio"
+                              name="parentFolderMode"
+                              checked={parentFolderMode === "root"}
+                              onChange={() => setParentFolderMode("root")}
+                              className="text-blue-600"
+                            />
+                            <div className="flex-1">
+                              <span className="font-semibold text-slate-800">האחסון שלי (My Drive - תיקייה ראשית)</span>
+                              <p className="text-[11px] text-slate-500">התיקייה תיווצר ישירות בשורש ה-Drive</p>
+                            </div>
+                          </label>
+
+                          <label className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition text-xs hover:bg-slate-50 border-slate-200">
+                            <input
+                              type="radio"
+                              name="parentFolderMode"
+                              checked={parentFolderMode === "existing"}
+                              onChange={() => {
+                                setParentFolderMode("existing");
+                                if (driveFoldersList.length === 0) {
+                                  fetchDriveFolders();
+                                }
+                              }}
+                              className="text-blue-600"
+                            />
+                            <div className="flex-1">
+                              <span className="font-semibold text-slate-800">בתוך תיקייה קיימת (תת-תיקייה)</span>
+                              <p className="text-[11px] text-slate-500">בחר מתוך התיקיות הקיימות או הדבק קישור</p>
+                            </div>
+                          </label>
+                        </div>
+
+                        {parentFolderMode === "existing" && (
+                          <div className="mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-slate-700">בחר תיקיית יעד:</span>
+                              <button
+                                type="button"
+                                onClick={fetchDriveFolders}
+                                disabled={loadingDriveFolders}
+                                className="inline-flex items-center gap-1 text-[10px] text-blue-600 hover:underline"
+                              >
+                                <RefreshCw className={`w-3 h-3 ${loadingDriveFolders ? "animate-spin" : ""}`} />
+                                <span>רענן תיקיות</span>
+                              </button>
+                            </div>
+
+                            {driveFoldersList.length > 0 ? (
+                              <select
+                                value={parentFolderId}
+                                onChange={(e) => setParentFolderId(e.target.value)}
+                                className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              >
+                                <option value="">-- בחר תיקייה מתוך הדרייב --</option>
+                                {driveFoldersList.map((f) => (
+                                  <option key={f.id} value={f.id}>
+                                    {f.name}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <p className="text-[11px] text-slate-500">
+                                {loadingDriveFolders
+                                  ? "טוען תיקיות מ-Google Drive..."
+                                  : "לא נמצאו תיקיות או שטרם נטענו. ניתן להדביק קישור למטה:"}
+                              </p>
+                            )}
+
+                            <input
+                              type="text"
+                              dir="ltr"
+                              value={parentFolderId}
+                              onChange={(e) => setParentFolderId(e.target.value)}
+                              placeholder="או הדבק מזהה/קישור: https://drive.google.com/drive/folders/..."
+                              className="w-full text-xs font-mono p-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* SHEET PLACEMENT */}
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>היכן לפתוח את גיליון ה-Sheets?</span>
+                        </label>
+                        <div className="space-y-1.5">
+                          <label className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition text-xs hover:bg-slate-50 border-slate-200">
+                            <input
+                              type="radio"
+                              name="sheetPlacement"
+                              checked={sheetPlacement === "inside_folder"}
+                              onChange={() => setSheetPlacement("inside_folder")}
+                              className="text-blue-600"
+                            />
+                            <div className="flex-1">
+                              <span className="font-semibold text-slate-800">בתוך התיקייה הראשית שנוצרת (מומלץ)</span>
+                              <p className="text-[11px] text-slate-500">הגיליון יישמר יחד עם תיקיות המועמדים במקום מסודר אחד</p>
+                            </div>
+                          </label>
+
+                          <label className="flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition text-xs hover:bg-slate-50 border-slate-200">
+                            <input
+                              type="radio"
+                              name="sheetPlacement"
+                              checked={sheetPlacement === "same_level"}
+                              onChange={() => setSheetPlacement("same_level")}
+                              className="text-blue-600"
+                            />
+                            <div className="flex-1">
+                              <span className="font-semibold text-slate-800">לצד התיקייה הראשית (באותה רמת תיקייה)</span>
+                              <p className="text-[11px] text-slate-500">הגיליון והתיקייה הראשית ייווצרו כשני פריטים מקבילים</p>
+                            </div>
+                          </label>
+                        </div>
+
+                        {/* ADVANCED NAME CUSTOMIZATION TOGGLE */}
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowLocationSettings(!showLocationSettings)}
+                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                          >
+                            <span>התאמת שמות התיקייה והגיליון (אופציונלי)</span>
+                            {showLocationSettings ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex items-center justify-end">
-                      <button
-                        type="button"
-                        onClick={handleAutoCreateResources}
-                        disabled={autoCreateLoading}
-                        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg transition shadow-md disabled:opacity-50"
-                      >
-                        {autoCreateLoading ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 animate-spin" />
-                            <span>מקים תיקייה ומסד נתונים ב-Google...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-4 h-4 text-amber-300" />
-                            <span>צור גיליון ותיקייה אוטומטית עכשיו</span>
-                          </>
-                        )}
-                      </button>
+                    {/* CUSTOM NAMES SECTION (COLLAPSIBLE) */}
+                    {showLocationSettings && (
+                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-700">שם התיקייה הראשית:</label>
+                          <input
+                            type="text"
+                            value={customFolderName}
+                            onChange={(e) => setCustomFolderName(e.target.value)}
+                            className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mt-1"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-700">שם גיליון הנתונים:</label>
+                          <input
+                            type="text"
+                            value={customSheetName}
+                            onChange={(e) => setCustomSheetName(e.target.value)}
+                            className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mt-1"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SHARE EMAIL AND SUBMIT BUTTON */}
+                    <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                      <div className="flex-1 space-y-1">
+                        <label className="text-xs font-bold text-slate-700">
+                          כתובת אימייל לשיתוף (הזן את המייל שלך לקבלת הרשאות עריכה):
+                        </label>
+                        <input
+                          type="email"
+                          dir="ltr"
+                          value={autoCreateShareEmail}
+                          onChange={(e) => setAutoCreateShareEmail(e.target.value)}
+                          placeholder="your-name@gmail.com"
+                          className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <p className="text-[11px] text-slate-500">
+                          התיקייה והגיליון ישותפו עם כתובת זו כ-עורך (Editor) כך שתוכל לצפות ולערוך אותם בנוחות.
+                        </p>
+                      </div>
+
+                      <div>
+                        <button
+                          type="button"
+                          onClick={handleAutoCreateResources}
+                          disabled={autoCreateLoading}
+                          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg transition shadow-md disabled:opacity-50"
+                        >
+                          {autoCreateLoading ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>מקים תיקייה ומסד נתונים ב-Google...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4 text-amber-300" />
+                              <span>צור גיליון ותיקייה אוטומטית עכשיו</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
 

@@ -4,6 +4,7 @@ import { resetEnvCache } from "@/lib/env";
 import {
   saveDynamicGoogleConfig,
   getDynamicGoogleConfig,
+  extractDriveFolderId,
 } from "@/lib/dynamicConfig";
 import { assertAdminRole } from "@/lib/security";
 
@@ -40,6 +41,15 @@ export async function POST(request: Request) {
     const spreadsheetTitle =
       body.spreadsheetTitle || "מערכת קליטת מועמדים - נתוני Onboarding";
 
+    const rawParent = String(body.parentFolderId || "").trim();
+    const cleanParentFolderId =
+      rawParent && rawParent !== "root" ? extractDriveFolderId(rawParent) : "";
+
+    const sheetPlacement = String(body.sheetPlacement || "inside_folder");
+    const rawCustomSheetFolder = String(body.customSheetFolderId || "").trim();
+    const cleanCustomSheetFolder =
+      rawCustomSheetFolder ? extractDriveFolderId(rawCustomSheetFolder) : "";
+
     const dynamicConfig = getDynamicGoogleConfig();
 
     // 1. Get Google API clients
@@ -59,14 +69,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Create Drive Root Folder
+    // 2. Create Drive Folder (inside parent folder if selected, or at root)
     let driveFolderId = "";
     try {
+      const folderRequestBody: any = {
+        name: folderName,
+        mimeType: "application/vnd.google-apps.folder",
+      };
+      if (cleanParentFolderId) {
+        folderRequestBody.parents = [cleanParentFolderId];
+      }
+
       const folderRes = await drive.files.create({
-        requestBody: {
-          name: folderName,
-          mimeType: "application/vnd.google-apps.folder",
-        },
+        requestBody: folderRequestBody,
         fields: "id, name, webViewLink",
       });
       driveFolderId = folderRes.data.id || "";
@@ -267,15 +282,24 @@ export async function POST(request: Request) {
       console.warn("Warning during sheet data seeding:", err);
     }
 
-    // 5. Move spreadsheet into the newly created Drive folder
-    try {
-      await drive.files.update({
-        fileId: spreadsheetId,
-        addParents: driveFolderId,
-        fields: "id, parents",
-      });
-    } catch (err: any) {
-      console.warn("Could not add parent folder to spreadsheet:", err);
+    // 5. Place spreadsheet in selected location
+    let targetSheetParent = driveFolderId;
+    if (sheetPlacement === "same_level") {
+      targetSheetParent = cleanParentFolderId || "";
+    } else if (sheetPlacement === "custom" && cleanCustomSheetFolder) {
+      targetSheetParent = cleanCustomSheetFolder;
+    }
+
+    if (targetSheetParent) {
+      try {
+        await drive.files.update({
+          fileId: spreadsheetId,
+          addParents: targetSheetParent,
+          fields: "id, parents",
+        });
+      } catch (err: any) {
+        console.warn("Could not add parent folder to spreadsheet:", err);
+      }
     }
 
     // 6. Share resources with Admin's email (if provided)
