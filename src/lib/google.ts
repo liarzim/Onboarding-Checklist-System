@@ -77,6 +77,11 @@ export function getOAuth2Credentials() {
     clientSecret = clientSecret.slice(1, -1).trim();
   }
 
+  // Auto-correct if the first letter 'G' was missed when copying GOCSPX-
+  if (clientSecret.startsWith("OCSPX-")) {
+    clientSecret = "G" + clientSecret;
+  }
+
   return { clientId, clientSecret };
 }
 
