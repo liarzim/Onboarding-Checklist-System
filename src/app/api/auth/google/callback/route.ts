@@ -102,8 +102,15 @@ export async function GET(request: Request) {
     const errMsg = String(err?.message || "");
     let displayError = `אימות חשבון Google נכשל: ${errMsg || "פג תוקף הקוד"}`;
     if (errMsg.toLowerCase().includes("invalid_client")) {
-      displayError =
-        "אימות נכשל (invalid_client): ה-Client Secret אינו תואם ל-Client ID או שהמשתנה אינו מוגדר עבור סביבת Preview ב-Vercel.";
+      const clientIdMasked =
+        clientId.length > 15
+          ? `${clientId.slice(0, 12)}...${clientId.slice(-10)}`
+          : clientId;
+      const secretMasked =
+        clientSecret.length > 8
+          ? `${clientSecret.slice(0, 6)}...${clientSecret.slice(-4)}`
+          : clientSecret;
+      displayError = `אימות נכשל מול Google (שגיאת invalid_client): נשלח Client ID: [${clientIdMasked}] ו-Secret: [${secretMasked}]. ודא ששני הערכים הללו ב-Vercel שייכים בדיוק לאותו ה-OAuth Client ב-Google Cloud Console ואינם מעורבבים עם Client ישן.`;
     }
     loginUrl.searchParams.set("error", displayError);
     return NextResponse.redirect(loginUrl);
