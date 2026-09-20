@@ -61,8 +61,22 @@ export const driveClient = new Proxy({} as drive_v3.Drive, {
 });
 
 export function getOAuth2Client(redirectUri?: string) {
-  const clientId = process.env.GOOGLE_CLIENT_ID || "";
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
+  let clientId = (process.env.GOOGLE_CLIENT_ID || "").trim();
+  let clientSecret = (process.env.GOOGLE_CLIENT_SECRET || "").trim();
+
+  if (
+    (clientId.startsWith('"') && clientId.endsWith('"')) ||
+    (clientId.startsWith("'") && clientId.endsWith("'"))
+  ) {
+    clientId = clientId.slice(1, -1).trim();
+  }
+  if (
+    (clientSecret.startsWith('"') && clientSecret.endsWith('"')) ||
+    (clientSecret.startsWith("'") && clientSecret.endsWith("'"))
+  ) {
+    clientSecret = clientSecret.slice(1, -1).trim();
+  }
+
   const callbackUrl =
     redirectUri ||
     `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/auth/google/callback`;
