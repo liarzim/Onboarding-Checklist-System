@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
-import { google } from "googleapis";
 import { getEnv } from "@/lib/env";
-import { extractSpreadsheetId, extractDriveFolderId } from "@/lib/dynamicConfig";
+import { getSheetsClient, getDriveClient } from "@/lib/google";
+import {
+  extractSpreadsheetId,
+  extractDriveFolderId,
+  getDynamicGoogleConfig,
+} from "@/lib/dynamicConfig";
 import { assertAdminRole } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
-
-const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/spreadsheets",
-  "https://www.googleapis.com/auth/drive",
-];
 
 export async function POST(request: Request) {
   try {
@@ -17,16 +16,19 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => ({}));
     const env = getEnv();
+    const dynamicConfig = getDynamicGoogleConfig();
 
     const targetSpreadsheetId = extractSpreadsheetId(
-      body.spreadsheetId || env.GOOGLE_SPREADSHEET_ID || ""
+      body.spreadsheetId || dynamicConfig.spreadsheet_id || env.GOOGLE_SPREADSHEET_ID || ""
     );
     const targetDriveFolderId = extractDriveFolderId(
-      body.driveFolderId || env.GOOGLE_DRIVE_ROOT_FOLDER_ID || ""
+      body.driveFolderId || dynamicConfig.drive_folder_id || env.GOOGLE_DRIVE_ROOT_FOLDER_ID || ""
     );
 
-    const serviceAccountEmail = env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-    const privateKey = env.GOOGLE_PRIVATE_KEY;
+    const isOauth = Boolean(dynamicConfig.oauth_refresh_token);
+    const serviceAccountEmail = dynamicConfig.service_account_email || env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "";
+    const privateKey = dynamicConfig.service_account_private_key || env.GOOGLE_PRIVATE_KEY || "";
+    const hasServiceAccount = Boolean(privateKey && privateKey.length > 50);
 
     const result = {
       credentialsOk: false,
@@ -37,28 +39,25 @@ export async function POST(request: Request) {
       overallHealthy: false,
     };
 
-    // 1. Verify Service Account Credentials
-    if (!serviceAccountEmail || !privateKey || privateKey.length < 50) {
+    // 1. Verify Credentials (either OAuth or Service Account)
+    if (!isOauth && !hasServiceAccount) {
       return NextResponse.json({
         success: false,
         result: {
           ...result,
           credentialsOk: false,
-          sheetsDetails: "מפתח הפרטי של ה-Service Account אינו מוגדר כראוי בשרת.",
-          driveDetails: "מפתח הפרטי של ה-Service Account אינו מוגדר כראוי בשרת.",
+          sheetsDetails: "טרם חובר חשבון Google של האדמין (OAuth) או מפתח Service Account בשרת.",
+          driveDetails: "טרם חובר חשבון Google של האדמין (OAuth) או מפתח Service Account בשרת.",
         },
-        message: "פרטי ה-Service Account אינם מוגדרים במלואם",
+        message: "טרם חובר חשבון Google או מפתח שירות",
       });
     }
 
-    let authClient: InstanceType<typeof google.auth.JWT>;
+    let sheets: ReturnType<typeof getSheetsClient>;
+    let drive: ReturnType<typeof getDriveClient>;
     try {
-      authClient = new google.auth.JWT({
-        email: serviceAccountEmail,
-        key: privateKey,
-        scopes: GOOGLE_SCOPES,
-      });
-      await authClient.authorize();
+      sheets = getSheetsClient();
+      drive = getDriveClient();
       result.credentialsOk = true;
     } catch (authError: any) {
       return NextResponse.json({
@@ -66,20 +65,17 @@ export async function POST(request: Request) {
         result: {
           ...result,
           credentialsOk: false,
-          sheetsDetails: `שגיאת אימות מול Google Cloud: ${authError?.message || "פרטי מפתח לא תקינים"}`,
-          driveDetails: `שגיאת אימות מול Google Cloud: ${authError?.message || "פרטי מפתח לא תקינים"}`,
+          sheetsDetails: `שגיאת אימות מול Google Cloud: ${authError?.message || "פרטי חיבור לא תקינים"}`,
+          driveDetails: `שגיאת אימות מול Google Cloud: ${authError?.message || "פרטי חיבור לא תקינים"}`,
         },
-        message: "אימות מול Google Cloud נכשל. ודא כי קובץ המפתח והאימייל תקינים.",
+        message: "אימות מול Google Cloud נכשל.",
       });
     }
-
-    const sheets = google.sheets({ version: "v4", auth: authClient });
-    const drive = google.drive({ version: "v3", auth: authClient });
 
     // 2. Test Google Sheets Access
     if (!targetSpreadsheetId) {
       result.sheetsOk = false;
-      result.sheetsDetails = "טרם הוגדר Spreadsheet ID";
+      result.sheetsDetails = "טרם הוגדר גיליון. לחץ על 'צור גיליון ותיקייה אוטומטית עכשיו' בשלב 2 למטה.";
     } else {
       try {
         const sheetRes = await sheets.spreadsheets.get({
@@ -91,14 +87,20 @@ export async function POST(request: Request) {
           (s) => s.properties?.title || ""
         );
         result.sheetsOk = true;
-        result.sheetsDetails = `חובר בהצלחה: "${title}" (נמצאו ${sheetTabs.length} לשוניות: ${sheetTabs.slice(0, 5).join(", ")}${sheetTabs.length > 5 ? "..." : ""})`;
+        result.sheetsDetails = `חובר בהצלחה לגיליון: "${title}" (נמצאו ${sheetTabs.length} לשוניות: ${sheetTabs.slice(0, 5).join(", ")}${sheetTabs.length > 5 ? "..." : ""})`;
       } catch (sheetError: any) {
         result.sheetsOk = false;
         const msg = sheetError?.message || "";
         if (msg.includes("404") || msg.includes("not found")) {
-          result.sheetsDetails = "הגיליון לא נמצא. בדוק את ה-Spreadsheet ID וודא ששיתפת את ה-Service Account כ-Editor.";
-        } else if (msg.includes("403") || msg.includes("permission") || msg.includes("The caller does not have permission")) {
-          result.sheetsDetails = `חוסר הרשאות בגיליון: יש לשתף את כתובת ${serviceAccountEmail} בהרשאת עורך (Editor) בגיליון.`;
+          result.sheetsDetails = "הגיליון לא נמצא. בדוק את מזהה הגיליון (Spreadsheet ID).";
+        } else if (
+          msg.includes("403") ||
+          msg.includes("permission") ||
+          msg.includes("The caller does not have permission")
+        ) {
+          result.sheetsDetails = isOauth
+            ? `חוסר הרשאות בגיליון עבור חשבון ${dynamicConfig.oauth_email || "המחובר"}. יש לוודא שהוענקה הרשאת עריכה.`
+            : `חוסר הרשאות בגיליון: יש לשתף את כתובת ${serviceAccountEmail} בהרשאת עורך (Editor).`;
         } else {
           result.sheetsDetails = `שגיאה בגישה לגיליון: ${msg}`;
         }
@@ -108,7 +110,7 @@ export async function POST(request: Request) {
     // 3. Test Google Drive Access
     if (!targetDriveFolderId) {
       result.driveOk = false;
-      result.driveDetails = "טרם הוגדר Folder ID לתיקיית השורש";
+      result.driveDetails = "טרם הוגדרה תיקייה ראשית. לחץ על 'צור גיליון ותיקייה אוטומטית עכשיו' בשלב 2 למטה.";
     } else {
       try {
         const folderRes = await drive.files.get({
@@ -125,15 +127,23 @@ export async function POST(request: Request) {
           result.driveDetails = `חובר בהצלחה לתיקייה: "${folderName}" (הרשאות יצירת קבצים ותיקיות מועמדים תקינות)`;
         } else {
           result.driveOk = false;
-          result.driveDetails = `התיקייה "${folderName}" נמצאה, אך חסרה הרשאת עריכה (canAddChildren). יש לשתף את ${serviceAccountEmail} כ-Editor.`;
+          result.driveDetails = isOauth
+            ? `התיקייה "${folderName}" נמצאה, אך חסרה הרשאת עריכה עבור חשבונך.`
+            : `התיקייה "${folderName}" נמצאה, אך חסרה הרשאת עריכה (canAddChildren). יש לשתף את ${serviceAccountEmail} כ-Editor.`;
         }
       } catch (driveError: any) {
         result.driveOk = false;
         const msg = driveError?.message || "";
         if (msg.includes("404") || msg.includes("not found")) {
-          result.driveDetails = "התיקייה לא נמצאה בדרייב. בדוק את ה-Folder ID וודא ששיתפת את ה-Service Account כ-Editor.";
-        } else if (msg.includes("403") || msg.includes("permission") || msg.includes("The caller does not have permission")) {
-          result.driveDetails = `חוסר הרשאות בדרייב: יש לשתף את כתובת ${serviceAccountEmail} בהרשאת עורך (Editor) בתיקייה.`;
+          result.driveDetails = "התיקייה לא נמצאה בדרייב. בדוק את מזהה התיקייה (Folder ID).";
+        } else if (
+          msg.includes("403") ||
+          msg.includes("permission") ||
+          msg.includes("The caller does not have permission")
+        ) {
+          result.driveDetails = isOauth
+            ? `חוסר הרשאות בדרייב: ודא שלחשבון ${dynamicConfig.oauth_email || "המחובר"} יש הרשאת עריכה בתיקייה זו.`
+            : `חוסר הרשאות בדרייב: יש לשתף את כתובת ${serviceAccountEmail} בהרשאת עורך (Editor) בתיקייה.`;
         } else {
           result.driveDetails = `שגיאה בגישה לדרייב: ${msg}`;
         }
