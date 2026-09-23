@@ -9,16 +9,6 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
-  FileCheck,
-  Shield,
-  Building,
-  User,
-  Calendar,
-  Phone,
-  Mail,
-  CreditCard,
-  Briefcase,
-  Lock,
   ArrowLeft,
 } from "lucide-react";
 import SignaturePad from "./SignaturePad";
@@ -112,11 +102,13 @@ export default function DigitalFormView({
   const [q4FatherName, setQ4FatherName] = useState("");
   const [q4Address, setQ4Address] = useState("");
 
-  // doc_9 fields
+  // doc_9 fields (faithful to original הנפקת כרטיס.docx)
+  const [q9NameEn, setQ9NameEn] = useState("");
   const [q9RoleInProject, setQ9RoleInProject] = useState("");
   const [q9ManagerName, setQ9ManagerName] = useState("");
-  const [q9AccessLevel, setQ9AccessLevel] = useState("רמת גישה 2 - מתחם משרדים ומעבדות");
-  const [q9AccessSites, setQ9AccessSites] = useState("קמפוס מרכזי, בניין פיתוח");
+  const [q9StartDate, setQ9StartDate] = useState(todayStr);
+  const [q9PreviousGov, setQ9PreviousGov] = useState("לא");
+  const [q9PreviousDates, setQ9PreviousDates] = useState("");
 
   // Acknowledgement checkbox
   const [agreeTerms, setAgreeTerms] = useState(true);
@@ -239,33 +231,52 @@ export default function DigitalFormView({
           className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-12 shadow-sm space-y-8 text-slate-900"
           dir="rtl"
         >
-          {/* Formal Document Header */}
-          <div className="border-b-2 border-slate-900 pb-6 space-y-3">
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span className="font-bold uppercase tracking-wider text-slate-700">
-                מערכת קליטה ואבטחת מידע - טופס רשמי
-              </span>
-              <span>תאריך מילוי: {todayStr}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 font-bold">
-                <FileCheck className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-black text-slate-900">{docInfo.name}</h1>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono border border-slate-200">
-                    גרסה {docInfo.version || meta.version || "1.0"}
-                  </span>
+          {/* Formal Authentic Government Header with Official Logos */}
+          <div className="border-b-2 border-slate-900 pb-5 space-y-4">
+            <div className="flex items-center justify-between">
+              {/* Right Side: gov.il Logo and Ministry Department */}
+              <div className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logos/gov_il_logo.jpg"
+                  alt="gov.il"
+                  className="h-10 w-auto object-contain"
+                />
+                <div className="text-right leading-tight">
+                  <span className="block text-xs font-black text-slate-900">מדינת ישראל</span>
+                  <span className="block text-[11px] font-bold text-slate-700">החשב הכללי</span>
+                  <span className="block text-[10px] text-slate-500 font-medium">התקשוב הממשלתי (מרכב"ה)</span>
                 </div>
-                <p className="text-sm text-slate-600 font-medium">{docInfo.shortDesc}</p>
-                {docInfo.lawReference && (
-                  <p className="text-xs text-blue-700 font-semibold mt-1">
-                    בסיס חוקי: {docInfo.lawReference}
-                  </p>
-                )}
+              </div>
+
+              {/* Center: Title & Subtitle */}
+              <div className="text-center px-2">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 underline decoration-slate-400 underline-offset-4">
+                  {docInfo.name}
+                </h1>
+                <p className="text-xs text-slate-600 font-medium mt-1">{docInfo.shortDesc}</p>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  <span>תאריך: </span>
+                  <span className="font-semibold text-slate-800">{todayStr}</span>
+                </div>
+              </div>
+
+              {/* Left Side: State of Israel Emblem (Magen David) */}
+              <div className="flex items-center justify-end">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logos/israel_emblem.png"
+                  alt="סמל מדינת ישראל"
+                  className="h-14 sm:h-16 w-auto object-contain"
+                />
               </div>
             </div>
+
+            {docInfo.lawReference && (
+              <div className="text-center text-[11px] text-blue-800 font-semibold bg-blue-50/70 py-1 px-3 rounded-lg border border-blue-200">
+                בסיס חוקי ומנהלי: {docInfo.lawReference}
+              </div>
+            )}
           </div>
 
           {/* Candidate Profile Details Summary Box */}
@@ -370,14 +381,18 @@ export default function DigitalFormView({
           {docTypeId === "doc_9" && (
             <Doc9SmartCardRequest
               candidate={candidate}
+              nameEn={q9NameEn}
+              setNameEn={setQ9NameEn}
               roleInProject={q9RoleInProject}
               setRoleInProject={setQ9RoleInProject}
               managerName={q9ManagerName}
               setManagerName={setQ9ManagerName}
-              accessLevel={q9AccessLevel}
-              setAccessLevel={setQ9AccessLevel}
-              accessSites={q9AccessSites}
-              setAccessSites={setQ9AccessSites}
+              startDate={q9StartDate}
+              setStartDate={setQ9StartDate}
+              previousGov={q9PreviousGov}
+              setPreviousGov={setQ9PreviousGov}
+              previousDates={q9PreviousDates}
+              setPreviousDates={setQ9PreviousDates}
               docInfo={docInfo}
             />
           )}
@@ -406,11 +421,27 @@ export default function DigitalFormView({
             />
           </div>
 
-          {/* Document Footer with Timestamp & Verification Stamp */}
-          <div className="pt-6 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-400">
-            <span>מזהה מועמד: {candidate.candidate_id}</span>
-            <span>מזהה תבנית: {docTypeId}</span>
-            <span>מסמך דיגיטלי מאובטח (E-Sign)</span>
+          {/* Formal Authentic Government Footer */}
+          <div className="pt-6 border-t-2 border-slate-900 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-600 gap-3">
+            <div className="text-right">
+              <span>אוצר ברשת: </span>
+              <span className="font-mono text-blue-700 font-semibold">www.mof.gov.il</span>
+              <span className="mx-1.5">|</span>
+              <span>רח' יפו 234 ירושלים</span>
+            </div>
+            <div className="flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logos/gov_il_logo.jpg"
+                alt="gov.il"
+                className="h-6 w-auto object-contain opacity-80"
+              />
+            </div>
+            <div className="text-left font-mono">
+              <span>טל': 02-5012401</span>
+              <span className="mx-1.5">|</span>
+              <span>שער הממשלה: www.gov.il</span>
+            </div>
           </div>
         </div>
 
@@ -812,77 +843,183 @@ function Doc4CriminalRecordConsent({
 }
 
 // -------------------------------------------------------------
-// Form 9: Smart Card Request Form
+// Form 9: Smart Card Request Form (Faithful to הנפקת כרטיס.docx)
 // -------------------------------------------------------------
 function Doc9SmartCardRequest({
   candidate,
+  nameEn,
+  setNameEn,
   roleInProject,
   setRoleInProject,
   managerName,
   setManagerName,
-  accessLevel,
-  setAccessLevel,
-  accessSites,
-  setAccessSites,
+  startDate,
+  setStartDate,
+  previousGov,
+  setPreviousGov,
+  previousDates,
+  setPreviousDates,
   docInfo,
 }: any) {
   return (
-    <div className="space-y-4 text-sm leading-relaxed border border-slate-200 rounded-xl p-6 bg-slate-50/40">
-      <h3 className="font-bold text-slate-900 text-base border-b pb-2">
-        טופס בקשה להנפקת כרטיס חכם והרשאות גישה
-      </h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-        <div>
-          <label className="font-semibold block mb-1">תפקיד מיועד בפרויקט:</label>
-          <input
-            type="text"
-            value={roleInProject}
-            onChange={(e) => setRoleInProject(e.target.value)}
-            placeholder="למשל: מפתח תוכנה בכיר / מנהל רשת"
-            className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-            required
-          />
-        </div>
-        <div>
-          <label className="font-semibold block mb-1">שם מנהל פרויקט מאשר:</label>
-          <input
-            type="text"
-            value={managerName}
-            onChange={(e) => setManagerName(e.target.value)}
-            placeholder="שם מנהל/ת ישיר"
-            className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-            required
-          />
-        </div>
-        <div>
-          <label className="font-semibold block mb-1">רמת סיווג וגישה נדרשת:</label>
-          <select
-            value={accessLevel}
-            onChange={(e) => setAccessLevel(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-          >
-            <option value="רמת גישה 1 - מתחם משרדים">רמת גישה 1 - מתחם משרדים</option>
-            <option value="רמת גישה 2 - מתחם משרדים ומעבדות">רמת גישה 2 - מתחם משרדים ומעבדות</option>
-            <option value="רמת גישה 3 - חוות שרתים ומתקנים מוגנים">רמת גישה 3 - חוות שרתים ומתקנים מוגנים</option>
-          </select>
-        </div>
-        <div>
-          <label className="font-semibold block mb-1">אתרים ומתחמים מבוקשים לגישה:</label>
-          <input
-            type="text"
-            value={accessSites}
-            onChange={(e) => setAccessSites(e.target.value)}
-            placeholder="קמפוס מרכזי, חוות שרתים וכד'"
-            className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-          />
+    <div className="space-y-6 text-sm text-slate-900">
+      {/* Notice header */}
+      <div className="text-xs text-slate-600 font-semibold italic border-b pb-2">
+        * יש למלא את הטופס בכתב ברור וקריא.
+      </div>
+
+      {/* Underlined fields table/rows matching original document */}
+      <div className="space-y-4 bg-slate-50/60 p-6 rounded-2xl border border-slate-200">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">שם פרטי ומשפחה:</label>
+            <div className="p-2.5 bg-white border-b-2 border-slate-400 font-bold text-slate-900 rounded-t">
+              {candidate.full_name}
+            </div>
+          </div>
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">שם פרטי ומשפחה באנגלית:</label>
+            <input
+              type="text"
+              value={nameEn}
+              onChange={(e) => setNameEn(e.target.value)}
+              placeholder="Full Name in English"
+              dir="ltr"
+              className="w-full border-b-2 border-slate-400 p-2.5 text-xs bg-white focus:outline-hidden font-medium rounded-t"
+            />
+          </div>
+
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">מספר תעודת זהות:</label>
+            <div className="p-2.5 bg-white border-b-2 border-slate-400 font-mono font-bold text-slate-900 rounded-t">
+              {candidate.id_number}
+            </div>
+          </div>
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">תפקיד מיועד:</label>
+            <input
+              type="text"
+              value={roleInProject}
+              onChange={(e) => setRoleInProject(e.target.value)}
+              placeholder="למשל: מהנדס מערכות / מפתח תוכנה"
+              className="w-full border-b-2 border-slate-400 p-2.5 text-xs bg-white focus:outline-hidden font-medium rounded-t"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">דואר אלקטרוני:</label>
+            <div className="p-2.5 bg-white border-b-2 border-slate-400 font-mono text-slate-900 rounded-t">
+              {candidate.email}
+            </div>
+          </div>
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">סוג העסקה:</label>
+            <div className="p-2.5 bg-white border-b-2 border-slate-400 font-semibold text-slate-800 rounded-t">
+              עובד קבלן / מיקור חוץ ({candidate.vendor_company_name || candidate.vendor_id})
+            </div>
+          </div>
+
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">תאריך תחילת העסקה:</label>
+            <input
+              type="text"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full border-b-2 border-slate-400 p-2.5 text-xs bg-white focus:outline-hidden font-medium rounded-t"
+            />
+          </div>
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">העסקה במשרד ממשלתי קודם (כן/לא ותאריכים):</label>
+            <div className="flex gap-2">
+              <select
+                value={previousGov}
+                onChange={(e) => setPreviousGov(e.target.value)}
+                className="border-b-2 border-slate-400 p-2 text-xs bg-white focus:outline-hidden font-semibold rounded-t"
+              >
+                <option value="לא">לא</option>
+                <option value="כן">כן</option>
+              </select>
+              {previousGov === "כן" && (
+                <input
+                  type="text"
+                  value={previousDates}
+                  onChange={(e) => setPreviousDates(e.target.value)}
+                  placeholder="ציין משרד ושנים"
+                  className="flex-1 border-b-2 border-slate-400 p-2 text-xs bg-white focus:outline-hidden rounded-t"
+                />
+              )}
+            </div>
+          </div>
         </div>
       </div>
-      <div className="space-y-2 text-slate-700 text-xs sm:text-sm pt-2">
-        {docInfo.fullContent.map((clause: string, i: number) => (
-          <p key={i} className="leading-relaxed">
-            {clause}
-          </p>
-        ))}
+
+      {/* Candidate Declaration Section */}
+      <div className="border border-slate-200 rounded-xl p-5 bg-white space-y-2">
+        <h4 className="font-black text-sm text-slate-900 border-b pb-1">
+          הצהרת מבקש/ת התעודה
+        </h4>
+        <p className="text-xs text-slate-700 leading-relaxed">
+          הנני מאשר/ת בזאת שכל הפרטים שמסרתי נכונים.
+        </p>
+        <p className="text-xs text-slate-700 leading-relaxed">
+          אני מאשר/ת בזאת את מסירת המידע הנ"ל למרכז להנפקת התעודות, לצורך הנפקת תעודה עבורי.
+        </p>
+        <div className="pt-2 text-xs text-slate-500 font-medium">
+          חתימת העובד/ת תוטמע להלן באמצעות משטח החתימה האלקטרוני.
+        </div>
+      </div>
+
+      {/* Unit Representative Declaration Section */}
+      <div className="border border-slate-200 rounded-xl p-5 bg-white space-y-3">
+        <h4 className="font-black text-sm text-slate-900 border-b pb-1">
+          הצהרת נציג היחידה / מנהל פרויקט
+        </h4>
+        <p className="text-xs text-slate-700 leading-relaxed">
+          הנני מאשר/ת שמר/גב' <strong>{candidate.full_name}</strong> מס' תעודת זהות <strong>{candidate.id_number}</strong> חתם בנוכחותי על טופס הבקשה לתעודה. הפרטים אומתו וזיהיתי את המבקש.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
+          <div>
+            <label className="font-semibold block mb-1">שם מנהל מאשר:</label>
+            <input
+              type="text"
+              value={managerName}
+              onChange={(e) => setManagerName(e.target.value)}
+              placeholder="שם מנהל/ת ישיר"
+              className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white"
+            />
+          </div>
+          <div>
+            <label className="font-semibold block mb-1">תפקיד מנהל מאשר:</label>
+            <input
+              type="text"
+              defaultValue="מנהל פרויקט / מוביל צוות"
+              className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Original Instructions Box */}
+      <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-4 text-xs text-amber-950 space-y-2">
+        <h5 className="font-bold text-amber-900">הנחיות הגעה ואישור רשמיות:</h5>
+        <ul className="list-disc list-inside space-y-1 text-slate-700">
+          <li>
+            יש להגיע עם טופס זה לגב' עופרה אפרים באגף משאבי אנוש, כדי להצטלם עבור הכרטיס חכם, ולאחר החתמת הטופס ע"י מר אריה בייגן באגף המיכון, במשרד האוצר הראשי.
+          </li>
+          <li>
+            יש להגיע לאחר תיאום טלפוני מראש בלבד!
+          </li>
+          <li>
+            עופרה אפרים: 5317769 / 5317430 (קומת כניסה)
+          </li>
+          <li>
+            אריה בייגן: 5317605 (קומה 4)
+          </li>
+          <li>
+            במקרים חריגים בהם עופרה איננה ניתן לפנות לגב' מירב לוי חסון: 5317879, בתיאום מראש.
+          </li>
+        </ul>
       </div>
     </div>
   );

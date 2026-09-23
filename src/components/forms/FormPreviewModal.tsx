@@ -3,14 +3,7 @@
 import React, { useState } from "react";
 import {
   X,
-  FileCheck,
-  Shield,
   Eye,
-  Calendar,
-  Building,
-  User,
-  CreditCard,
-  Briefcase,
 } from "lucide-react";
 import { getFullDocumentInfo } from "@/lib/forms/declarationsFullText";
 import { FORM_METADATA_LIST } from "@/lib/forms/formDefinitions";
@@ -83,28 +76,52 @@ export default function FormPreviewModal({
         <div className="p-6 sm:p-10 space-y-6 overflow-y-auto bg-slate-100 flex-1">
           {/* Document Sheet Container (Simulating Print Canvas) */}
           <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-12 shadow-sm space-y-8 text-slate-900 max-w-3xl mx-auto">
-            {/* Header */}
-            <div className="border-b-2 border-slate-900 pb-5 space-y-3">
-              <div className="flex items-center justify-between text-xs text-slate-500">
-                <span className="font-bold uppercase tracking-wider text-slate-700">
-                  מערכת קליטה ואבטחת מידע - תבנית רשמית
-                </span>
-                <span>תאריך מילוי: {todayStr}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 font-bold">
-                  <FileCheck className="w-6 h-6" />
+            {/* Formal Authentic Government Header with Official Logos */}
+            <div className="border-b-2 border-slate-900 pb-5 space-y-4">
+              <div className="flex items-center justify-between">
+                {/* Right Side: gov.il Logo and Ministry Department */}
+                <div className="flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/logos/gov_il_logo.jpg"
+                    alt="gov.il"
+                    className="h-10 w-auto object-contain"
+                  />
+                  <div className="text-right leading-tight">
+                    <span className="block text-xs font-black text-slate-900">מדינת ישראל</span>
+                    <span className="block text-[11px] font-bold text-slate-700">החשב הכללי</span>
+                    <span className="block text-[10px] text-slate-500 font-medium">התקשוב הממשלתי (מרכב"ה)</span>
+                  </div>
                 </div>
-                <div>
-                  <h1 className="text-2xl font-black text-slate-900">{docInfo.name}</h1>
-                  <p className="text-xs text-slate-600 font-medium">{docInfo.shortDesc}</p>
-                  {docInfo.lawReference && (
-                    <p className="text-[11px] text-blue-700 font-medium mt-0.5">
-                      בסיס חוקי: {docInfo.lawReference}
-                    </p>
-                  )}
+
+                {/* Center: Title & Subtitle */}
+                <div className="text-center px-2">
+                  <h1 className="text-xl sm:text-2xl font-black text-slate-900 underline decoration-slate-400 underline-offset-4">
+                    {docInfo.name}
+                  </h1>
+                  <p className="text-xs text-slate-600 font-medium mt-1">{docInfo.shortDesc}</p>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    <span>תאריך: </span>
+                    <span className="font-semibold text-slate-800">{todayStr}</span>
+                  </div>
+                </div>
+
+                {/* Left Side: State of Israel Emblem (Magen David) */}
+                <div className="flex items-center justify-end">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/logos/israel_emblem.png"
+                    alt="סמל מדינת ישראל"
+                    className="h-14 sm:h-16 w-auto object-contain"
+                  />
                 </div>
               </div>
+
+              {docInfo.lawReference && (
+                <div className="text-center text-[11px] text-blue-800 font-semibold bg-blue-50/70 py-1 px-3 rounded-lg border border-blue-200">
+                  בסיס חוקי ומנהלי: {docInfo.lawReference}
+                </div>
+              )}
             </div>
 
             {/* Simulated Candidate Metadata Header Box */}
@@ -157,11 +174,27 @@ export default function FormPreviewModal({
               />
             </div>
 
-            {/* Document Footer */}
-            <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-400">
-              <span>מזהה תבנית: {docTypeId}</span>
-              <span>גרסת נוסח: {docInfo.version || "1.0"}</span>
-              <span>מסמך דיגיטלי מאובטח (E-Sign)</span>
+            {/* Formal Authentic Government Footer */}
+            <div className="pt-6 border-t-2 border-slate-900 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-600 gap-3">
+              <div className="text-right">
+                <span>אוצר ברשת: </span>
+                <span className="font-mono text-blue-700 font-semibold">www.mof.gov.il</span>
+                <span className="mx-1.5">|</span>
+                <span>רח' יפו 234 ירושלים</span>
+              </div>
+              <div className="flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logos/gov_il_logo.jpg"
+                  alt="gov.il"
+                  className="h-6 w-auto object-contain opacity-80"
+                />
+              </div>
+              <div className="text-left font-mono">
+                <span>טל': 02-5012401</span>
+                <span className="mx-1.5">|</span>
+                <span>שער הממשלה: www.gov.il</span>
+              </div>
             </div>
           </div>
         </div>
