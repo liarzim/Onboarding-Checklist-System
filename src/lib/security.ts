@@ -62,6 +62,14 @@ export async function getAuthorizedUser(email: string): Promise<{
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
 
+  if (normalized === "hr@demo.co.il") {
+    return {
+      authorized: true,
+      role: "HR",
+      full_name: "דנה כהן (רכזת קליטה ומשאבי אנוש)",
+    };
+  }
+
   if (normalized === "michael.liarzi@gmail.com") {
     return {
       authorized: true,

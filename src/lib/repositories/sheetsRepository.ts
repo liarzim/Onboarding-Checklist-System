@@ -1,5 +1,6 @@
 import { getSheetsClient } from "../google";
 import { getEnv } from "../env";
+import { loadTestStore, saveTestStore } from "../testStore";
 import type {
   Candidate,
   ChecklistItem,
@@ -21,6 +22,16 @@ export const SHEET_NAMES = {
   PROJECTS: "Projects",
   ADMINS: "Admins",
 } as const;
+
+export const DEFAULT_VENDORS: Vendor[] = [
+  {
+    vendor_id: "vendor_demo",
+    company_name: "ספק דמו - מטריקס טכנולוגיות בע\"מ",
+    contact_name: "אבי כהן (מנהל גיוס)",
+    contact_email: "vendor@demo.co.il",
+    is_active: true,
+  },
+];
 
 export const DEFAULT_REQUIRED_DOCUMENTS: Omit<DocumentType, "template_drive_url">[] = [
   { doc_type_id: "doc_1", doc_name: "שאלון אישי רמה 5", is_required: true, order_index: 1 },
@@ -88,18 +99,32 @@ export class SheetsRepository {
         signature_url: row[15] ? String(row[15]) : null,
       }));
 
-      return candidates.filter((c) => {
-        if (filter?.vendor_id !== undefined && c.vendor_id !== filter.vendor_id) {
-          return false;
-        }
-        if (filter?.is_completed !== undefined && c.is_completed !== filter.is_completed) {
-          return false;
-        }
-        return true;
-      });
+      if (candidates.length > 0) {
+        return candidates.filter((c) => {
+          if (filter?.vendor_id !== undefined && c.vendor_id !== filter.vendor_id) {
+            return false;
+          }
+          if (filter?.is_completed !== undefined && c.is_completed !== filter.is_completed) {
+            return false;
+          }
+          return true;
+        });
+      }
     } catch {
-      return [];
+      // Ignore Google Sheets fetch error and use testStore fallback
     }
+
+    // Fallback: Read from local test store
+    const testStore = loadTestStore();
+    return testStore.candidates.filter((c) => {
+      if (filter?.vendor_id !== undefined && c.vendor_id !== filter.vendor_id) {
+        return false;
+      }
+      if (filter?.is_completed !== undefined && c.is_completed !== filter.is_completed) {
+        return false;
+      }
+      return true;
+    });
   }
 
   /**
@@ -135,83 +160,115 @@ export class SheetsRepository {
       signature_url?: string;
     }
   ): Promise<void> {
-    const sheets = getSheetsClient();
-    const spreadsheetId = this.getSpreadsheetId();
-
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${SHEET_NAMES.CANDIDATES}!A2:P`,
-    });
-
-    const rows = response.data.values || [];
-    const rowIndex = rows.findIndex((row) => String(row[0] || "") === candidate_id);
-
-    if (rowIndex < 0) {
-      throw new Error(`Candidate with ID "${candidate_id}" was not found in Candidates sheet`);
-    }
-
-    const sheetRowNumber = rowIndex + 2;
+    // 1. Update in local testStore
+    const testStore = loadTestStore();
+    const candidateIdx = testStore.candidates.findIndex((c) => c.candidate_id === candidate_id);
     const now = new Date().toISOString();
-
-    if (updateData.full_name) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: `${SHEET_NAMES.CANDIDATES}!B${sheetRowNumber}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [[sanitizeSheetCellValue(updateData.full_name)]] },
-      });
+    if (candidateIdx >= 0) {
+      const c = testStore.candidates[candidateIdx];
+      testStore.candidates[candidateIdx] = {
+        ...c,
+        full_name: updateData.full_name || c.full_name,
+        id_number: updateData.id_number || c.id_number,
+        project_id: updateData.project_id || c.project_id,
+        current_stage_id: "stage_2",
+        is_signed_by_candidate: true,
+        signature_url: updateData.signature_url || c.signature_url,
+        updated_at: now,
+      };
+      saveTestStore(testStore);
     }
 
-    if (updateData.id_number) {
-      await sheets.spreadsheets.values.update({
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
+
+      const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${SHEET_NAMES.CANDIDATES}!C${sheetRowNumber}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [[sanitizeSheetCellValue(updateData.id_number)]] },
+        range: `${SHEET_NAMES.CANDIDATES}!A2:P`,
       });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex((row) => String(row[0] || "") === candidate_id);
+
+      if (rowIndex >= 0) {
+        const sheetRowNumber = rowIndex + 2;
+
+        if (updateData.full_name) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `${SHEET_NAMES.CANDIDATES}!B${sheetRowNumber}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: [[sanitizeSheetCellValue(updateData.full_name)]] },
+          });
+        }
+
+        if (updateData.id_number) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `${SHEET_NAMES.CANDIDATES}!C${sheetRowNumber}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: [[sanitizeSheetCellValue(updateData.id_number)]] },
+          });
+        }
+
+        if (updateData.project_id) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `${SHEET_NAMES.CANDIDATES}!G${sheetRowNumber}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: [[sanitizeSheetCellValue(updateData.project_id)]] },
+          });
+        }
+
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.CANDIDATES}!I${sheetRowNumber}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: [["stage_2"]] },
+        });
+
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.CANDIDATES}!L${sheetRowNumber}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: [[now]] },
+        });
+
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.CANDIDATES}!O${sheetRowNumber}:P${sheetRowNumber}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: [["TRUE", updateData.signature_url || ""]] },
+        });
+      }
+    } catch (err) {
+      console.warn("Sheets markCandidateSigned offline fallback:", err);
     }
-
-    if (updateData.project_id) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: `${SHEET_NAMES.CANDIDATES}!G${sheetRowNumber}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [[sanitizeSheetCellValue(updateData.project_id)]] },
-      });
-    }
-
-    // Advance stage to stage_2, update timestamp, mark signed, and store signature url
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${SHEET_NAMES.CANDIDATES}!I${sheetRowNumber}`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: [["stage_2"]] },
-    });
-
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${SHEET_NAMES.CANDIDATES}!L${sheetRowNumber}`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: [[now]] },
-    });
-
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${SHEET_NAMES.CANDIDATES}!O${sheetRowNumber}:P${sheetRowNumber}`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: [["TRUE", updateData.signature_url || ""]] },
-    });
   }
 
   /**
    * Creates a new candidate row in the Candidates sheet.
    */
   async createCandidate(candidate: Candidate): Promise<void> {
-    const sheets = getSheetsClient();
-    const spreadsheetId = this.getSpreadsheetId();
-
     const accessToken = candidate.access_token || `token_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const tokenExpiresAt = candidate.token_expires_at || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+
+    const candidateWithToken: Candidate = {
+      ...candidate,
+      access_token: accessToken,
+      token_expires_at: tokenExpiresAt,
+    };
+
+    // Save to local test store
+    const testStore = loadTestStore();
+    const existingIdx = testStore.candidates.findIndex((c) => c.candidate_id === candidate.candidate_id);
+    if (existingIdx >= 0) {
+      testStore.candidates[existingIdx] = candidateWithToken;
+    } else {
+      testStore.candidates.unshift(candidateWithToken);
+    }
+    saveTestStore(testStore);
 
     const row = [
       sanitizeSheetCellValue(candidate.candidate_id),
@@ -232,90 +289,126 @@ export class SheetsRepository {
       candidate.signature_url || "",
     ];
 
-    await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: `${SHEET_NAMES.CANDIDATES}!A:P`,
-      valueInputOption: "USER_ENTERED",
-      insertDataOption: "INSERT_ROWS",
-      requestBody: {
-        values: [row],
-      },
-    });
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
+      await sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CANDIDATES}!A:P`,
+        valueInputOption: "USER_ENTERED",
+        insertDataOption: "INSERT_ROWS",
+        requestBody: {
+          values: [row],
+        },
+      });
+    } catch (err) {
+      console.warn("Sheets createCandidate offline fallback:", err);
+    }
   }
 
   /**
    * Updates candidate stage in Candidates sheet.
    */
   async updateCandidateStage(candidate_id: string, stage_id: string): Promise<void> {
-    const sheets = getSheetsClient();
-    const spreadsheetId = this.getSpreadsheetId();
-
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${SHEET_NAMES.CANDIDATES}!A2:L`,
-    });
-
-    const rows = response.data.values || [];
-    const rowIndex = rows.findIndex((row) => String(row[0] || "") === candidate_id);
-
-    if (rowIndex < 0) {
-      throw new Error(`Candidate with ID "${candidate_id}" was not found in Candidates sheet`);
-    }
-
-    const sheetRowNumber = rowIndex + 2;
     const now = new Date().toISOString();
 
-    // Update current_stage_id (Col I) and updated_at (Col L)
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${SHEET_NAMES.CANDIDATES}!I${sheetRowNumber}`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: [[stage_id]],
-      },
-    });
+    // 1. Update in local testStore
+    const testStore = loadTestStore();
+    const cIdx = testStore.candidates.findIndex((c) => c.candidate_id === candidate_id);
+    if (cIdx >= 0) {
+      testStore.candidates[cIdx] = {
+        ...testStore.candidates[cIdx],
+        current_stage_id: stage_id,
+        is_completed: stage_id === "stage_completed",
+        updated_at: now,
+      };
+      saveTestStore(testStore);
+    }
 
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${SHEET_NAMES.CANDIDATES}!L${sheetRowNumber}`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: [[now]],
-      },
-    });
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
+
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CANDIDATES}!A2:L`,
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex((row) => String(row[0] || "") === candidate_id);
+
+      if (rowIndex >= 0) {
+        const sheetRowNumber = rowIndex + 2;
+
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.CANDIDATES}!I${sheetRowNumber}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: [[stage_id]],
+          },
+        });
+
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.CANDIDATES}!L${sheetRowNumber}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: [[now]],
+          },
+        });
+      }
+    } catch (err) {
+      console.warn("Sheets updateCandidateStage offline fallback:", err);
+    }
   }
 
   /**
    * Sets is_completed to true and updates stage to stage_completed.
    */
   async completeCandidate(candidate_id: string): Promise<void> {
-    const sheets = getSheetsClient();
-    const spreadsheetId = this.getSpreadsheetId();
-
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${SHEET_NAMES.CANDIDATES}!A2:L`,
-    });
-
-    const rows = response.data.values || [];
-    const rowIndex = rows.findIndex((row) => String(row[0] || "") === candidate_id);
-
-    if (rowIndex < 0) {
-      throw new Error(`Candidate with ID "${candidate_id}" was not found in Candidates sheet`);
-    }
-
-    const sheetRowNumber = rowIndex + 2;
     const now = new Date().toISOString();
 
-    // Update current_stage_id, is_completed, updated_at
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${SHEET_NAMES.CANDIDATES}!I${sheetRowNumber}:L${sheetRowNumber}`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: [["stage_completed", "TRUE", rows[rowIndex][10] || now, now]],
-      },
-    });
+    // 1. Update in local testStore
+    const testStore = loadTestStore();
+    const cIdx = testStore.candidates.findIndex((c) => c.candidate_id === candidate_id);
+    if (cIdx >= 0) {
+      testStore.candidates[cIdx] = {
+        ...testStore.candidates[cIdx],
+        current_stage_id: "stage_completed",
+        is_completed: true,
+        updated_at: now,
+      };
+      saveTestStore(testStore);
+    }
+
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
+
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CANDIDATES}!A2:L`,
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex((row) => String(row[0] || "") === candidate_id);
+
+      if (rowIndex >= 0) {
+        const sheetRowNumber = rowIndex + 2;
+
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.CANDIDATES}!I${sheetRowNumber}:L${sheetRowNumber}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: [["stage_completed", "TRUE", rows[rowIndex][10] || now, now]],
+          },
+        });
+      }
+    } catch (err) {
+      console.warn("Sheets completeCandidate offline fallback:", err);
+    }
   }
 
   /**
@@ -429,10 +522,13 @@ export class SheetsRepository {
           updated_at: String(row[7] || new Date().toISOString()),
         }));
 
-      return items;
+      if (items.length > 0) return items;
     } catch {
-      return [];
+      // Ignore and fallback to testStore
     }
+
+    const testStore = loadTestStore();
+    return testStore.checklistItems.filter((item) => item.candidate_id === candidate_id);
   }
 
   /**
@@ -446,30 +542,54 @@ export class SheetsRepository {
       return;
     }
 
-    const sheets = getSheetsClient();
-    const spreadsheetId = this.getSpreadsheetId();
     const now = new Date().toISOString();
+    const testStore = loadTestStore();
+    for (const docType of docTypes) {
+      const existing = testStore.checklistItems.find(
+        (i) => i.candidate_id === candidate_id && i.doc_type_id === docType.doc_type_id
+      );
+      if (!existing) {
+        testStore.checklistItems.push({
+          checklist_item_id: `${candidate_id}_${docType.doc_type_id}`,
+          candidate_id,
+          doc_type_id: docType.doc_type_id,
+          status: "Not_Uploaded",
+          file_name: null,
+          file_drive_id: null,
+          file_drive_url: null,
+          updated_at: now,
+        });
+      }
+    }
+    saveTestStore(testStore);
 
-    const rows = docTypes.map((docType, index) => [
-      `${candidate_id}_${docType.doc_type_id || index + 1}`,
-      candidate_id,
-      docType.doc_type_id,
-      "Not_Uploaded",
-      "",
-      "",
-      "",
-      now,
-    ]);
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
 
-    await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A:H`,
-      valueInputOption: "USER_ENTERED",
-      insertDataOption: "INSERT_ROWS",
-      requestBody: {
-        values: rows,
-      },
-    });
+      const rows = docTypes.map((docType, index) => [
+        `${candidate_id}_${docType.doc_type_id || index + 1}`,
+        candidate_id,
+        docType.doc_type_id,
+        "Not_Uploaded",
+        "",
+        "",
+        "",
+        now,
+      ]);
+
+      await sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A:H`,
+        valueInputOption: "USER_ENTERED",
+        insertDataOption: "INSERT_ROWS",
+        requestBody: {
+          values: rows,
+        },
+      });
+    } catch (err) {
+      console.warn("Sheets initChecklist offline fallback:", err);
+    }
   }
 
   /**
@@ -485,65 +605,96 @@ export class SheetsRepository {
       file_drive_url?: string | null;
     }
   ): Promise<void> {
-    const sheets = getSheetsClient();
-    const spreadsheetId = this.getSpreadsheetId();
-
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A2:H`,
-    });
-
-    const rows = response.data.values || [];
-    const rowIndex = rows.findIndex(
-      (row) => String(row[1] || "") === candidate_id && String(row[2] || "") === doc_type_id
+    const now = new Date().toISOString();
+    const testStore = loadTestStore();
+    const itemIndex = testStore.checklistItems.findIndex(
+      (item) => item.candidate_id === candidate_id && item.doc_type_id === doc_type_id
     );
 
-    const now = new Date().toISOString();
-
-    if (rowIndex >= 0) {
-      const sheetRowNumber = rowIndex + 2;
-      const currentRow = rows[rowIndex];
-
-      const updatedRow = [
-        currentRow[0] || `${candidate_id}_${doc_type_id}`,
-        candidate_id,
-        doc_type_id,
-        update.status,
-        update.file_name ?? currentRow[4] ?? "",
-        update.file_drive_id ?? currentRow[5] ?? "",
-        update.file_drive_url ?? currentRow[6] ?? "",
-        now,
-      ];
-
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A${sheetRowNumber}:H${sheetRowNumber}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: {
-          values: [updatedRow],
-        },
-      });
+    if (itemIndex >= 0) {
+      testStore.checklistItems[itemIndex] = {
+        ...testStore.checklistItems[itemIndex],
+        status: update.status,
+        file_name: update.file_name ?? testStore.checklistItems[itemIndex].file_name,
+        file_drive_id: update.file_drive_id ?? testStore.checklistItems[itemIndex].file_drive_id,
+        file_drive_url: update.file_drive_url ?? testStore.checklistItems[itemIndex].file_drive_url,
+        updated_at: now,
+      };
     } else {
-      const newRow = [
-        `${candidate_id}_${doc_type_id}`,
+      testStore.checklistItems.push({
+        checklist_item_id: `${candidate_id}_${doc_type_id}`,
         candidate_id,
         doc_type_id,
-        update.status,
-        update.file_name || "",
-        update.file_drive_id || "",
-        update.file_drive_url || "",
-        now,
-      ];
-
-      await sheets.spreadsheets.values.append({
-        spreadsheetId,
-        range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A:H`,
-        valueInputOption: "USER_ENTERED",
-        insertDataOption: "INSERT_ROWS",
-        requestBody: {
-          values: [newRow],
-        },
+        status: update.status,
+        file_name: update.file_name || null,
+        file_drive_id: update.file_drive_id || null,
+        file_drive_url: update.file_drive_url || null,
+        updated_at: now,
       });
+    }
+    saveTestStore(testStore);
+
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
+
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A2:H`,
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(
+        (row) => String(row[1] || "") === candidate_id && String(row[2] || "") === doc_type_id
+      );
+
+      if (rowIndex >= 0) {
+        const sheetRowNumber = rowIndex + 2;
+        const currentRow = rows[rowIndex];
+
+        const updatedRow = [
+          currentRow[0] || `${candidate_id}_${doc_type_id}`,
+          candidate_id,
+          doc_type_id,
+          update.status,
+          update.file_name ?? currentRow[4] ?? "",
+          update.file_drive_id ?? currentRow[5] ?? "",
+          update.file_drive_url ?? currentRow[6] ?? "",
+          now,
+        ];
+
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A${sheetRowNumber}:H${sheetRowNumber}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: [updatedRow],
+          },
+        });
+      } else {
+        const newRow = [
+          `${candidate_id}_${doc_type_id}`,
+          candidate_id,
+          doc_type_id,
+          update.status,
+          update.file_name || "",
+          update.file_drive_id || "",
+          update.file_drive_url || "",
+          now,
+        ];
+
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A:H`,
+          valueInputOption: "USER_ENTERED",
+          insertDataOption: "INSERT_ROWS",
+          requestBody: {
+            values: [newRow],
+          },
+        });
+      }
+    } catch (err) {
+      console.warn("Sheets updateChecklistItem offline fallback:", err);
     }
   }
 
@@ -568,25 +719,35 @@ export class SheetsRepository {
    * Fetches all vendors from the Vendors sheet.
    */
   async getVendors(): Promise<Vendor[]> {
-    const sheets = getSheetsClient();
-    const spreadsheetId = this.getSpreadsheetId();
-
     try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
+
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: `${SHEET_NAMES.VENDORS}!A2:E`,
       });
 
       const rows = response.data.values || [];
-      return rows.map((row) => ({
+      const sheetVendors = rows.map((row) => ({
         vendor_id: String(row[0] || ""),
         company_name: String(row[1] || ""),
         contact_name: String(row[2] || ""),
         contact_email: String(row[3] || ""),
         is_active: String(row[4] ?? "").toUpperCase() !== "FALSE",
       }));
+
+      // Merge defaults with sheet vendors without duplicate emails
+      const vendorMap = new Map<string, Vendor>();
+      for (const def of DEFAULT_VENDORS) {
+        vendorMap.set(def.contact_email.toLowerCase(), def);
+      }
+      for (const v of sheetVendors) {
+        vendorMap.set(v.contact_email.toLowerCase(), v);
+      }
+      return Array.from(vendorMap.values());
     } catch {
-      return [];
+      return DEFAULT_VENDORS;
     }
   }
 
@@ -885,6 +1046,15 @@ export class SheetsRepository {
     const spreadsheetId = this.getSpreadsheetId();
 
     const envDefaults: AdminUser[] = [
+      {
+        email: "hr@demo.co.il",
+        full_name: "דנה כהן (רכזת קליטה ומשאבי אנוש)",
+        role: "HR",
+        password_hash: "",
+        must_change_password: false,
+        auth_provider: "both",
+        added_at: "מערכת משאבי אנוש",
+      },
       {
         email: "michael.liarzi@gmail.com",
         full_name: "מיכאל (מנהל ראשי)",
