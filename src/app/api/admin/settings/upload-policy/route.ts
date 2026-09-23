@@ -8,15 +8,19 @@ import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
 export const dynamic = "force-dynamic";
 
 const UploadPolicySchema = z.object({
-  passport_photo: z.object({
-    allowed_extensions: z.array(z.string()).min(1, "נדרשת לפחות סיומת מורשית אחת לתמונת פספורט"),
-    max_size_mb: z.number().positive(),
-  }),
-  id_card: z.object({
-    allowed_extensions: z.array(z.string()).min(1, "נדרשת לפחות סיומת מורשית אחת לתעודת זהות"),
-    max_files: z.number().int().positive(),
-    max_size_mb: z.number().positive(),
-  }),
+  passport_photo: z
+    .object({
+      allowed_extensions: z.array(z.string()).min(1, "נדרשת לפחות סיומת מורשית אחת לתמונת פספורט"),
+      max_size_mb: z.number().positive(),
+    })
+    .optional(),
+  id_card: z
+    .object({
+      allowed_extensions: z.array(z.string()).min(1, "נדרשת לפחות סיומת מורשית אחת לתעודת זהות"),
+      max_files: z.number().int().positive(),
+      max_size_mb: z.number().positive(),
+    })
+    .optional(),
 });
 
 /**
@@ -63,6 +67,17 @@ export async function PUT(request: Request) {
 
     const savedPolicy = saveUploadPolicy(parsed.data);
 
+    let auditDetail = "";
+    if (parsed.data.passport_photo && parsed.data.id_card) {
+      auditDetail = `עודכנו סיומות לתמונת פספורט (${savedPolicy.passport_photo.allowed_extensions.join(", ")}) והגדרות ת.ז.`;
+    } else if (parsed.data.passport_photo) {
+      auditDetail = `עודכנו סיומות מורשות לתמונת פספורט: ${savedPolicy.passport_photo.allowed_extensions.join(", ")}`;
+    } else if (parsed.data.id_card) {
+      auditDetail = `עודכנו הגדרות צילום ת.ז.: סיומות ${savedPolicy.id_card.allowed_extensions.join(", ")}, עד ${savedPolicy.id_card.max_files} קבצים`;
+    } else {
+      auditDetail = "עודכנה מדיניות קבצים";
+    }
+
     // Audit log
     await sheetsRepository.appendAuditLog({
       log_id: `log_${Date.now()}`,
@@ -72,12 +87,12 @@ export async function PUT(request: Request) {
       action_type: "UPDATE_UPLOAD_POLICY",
       entity_type: "SETTINGS",
       entity_id: "UPLOAD_POLICY",
-      details: `עודכנו סיומות מורשות לתמונת פספורט: ${savedPolicy.passport_photo.allowed_extensions.join(", ")}`,
+      details: auditDetail,
     });
 
     return NextResponse.json({
       success: true,
-      message: "מדיניות סיומות הקבצים עודכנה בהצלחה",
+      message: "המדיניות עודכנה בהצלחה",
       data: savedPolicy,
     });
   } catch (error: any) {

@@ -20,7 +20,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import DigitalFormView from "@/components/forms/DigitalFormView";
-import MediaUploadCard from "@/components/forms/MediaUploadCard";
+import IdCardUploadCard from "@/components/forms/IdCardUploadCard";
+import PassportPhotoUploadCard from "@/components/forms/PassportPhotoUploadCard";
 import { FORM_METADATA_LIST } from "@/lib/forms/formDefinitions";
 import { getFullDocumentInfo } from "@/lib/forms/declarationsFullText";
 
@@ -361,10 +362,18 @@ export default function CandidatePortalClient({
 
       {/* Selected Form or Media Upload Component View */}
       <div className="pt-2">
-        {selectedDocId === "doc_10" || selectedDocId === "doc_11" ? (
-          <MediaUploadCard
-            key={selectedDocId}
-            docTypeId={selectedDocId as "doc_10" | "doc_11"}
+        {selectedDocId === "doc_10" ? (
+          <IdCardUploadCard
+            key="doc_10"
+            candidate={candidate}
+            token={token}
+            nextDocTypeId={nextPendingDocId}
+            onUploaded={(submittedId) => handleFormSubmitted(submittedId)}
+            onNavigateNext={handleNavigateNext}
+          />
+        ) : selectedDocId === "doc_11" ? (
+          <PassportPhotoUploadCard
+            key="doc_11"
             candidate={candidate}
             token={token}
             nextDocTypeId={nextPendingDocId}
