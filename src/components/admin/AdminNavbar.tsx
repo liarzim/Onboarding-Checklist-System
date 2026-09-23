@@ -120,10 +120,15 @@ export default function AdminNavbar({ session }: AdminNavbarProps) {
             {/* Logo and System Title */}
             <Link
               href="/admin"
-              className="flex items-center gap-2.5 font-bold hover:text-blue-400 transition"
+              className="flex items-center gap-2.5 font-bold hover:opacity-90 transition"
             >
-              <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
-                <ShieldCheck className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-white/10 p-1 flex items-center justify-center shadow-md shadow-blue-500/10 shrink-0 border border-slate-700/50">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logos/app_logo.png"
+                  alt="Onboarding Logo"
+                  className="w-full h-full object-contain"
+                />
               </div>
               <div className="flex flex-col text-right">
                 <span className="text-sm sm:text-base leading-tight font-bold text-white">
@@ -203,8 +208,13 @@ export default function AdminNavbar({ session }: AdminNavbarProps) {
               {/* Drawer Header */}
               <div className="p-5 border-b border-slate-800 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-md">
-                    <ShieldCheck className="w-4 h-4" />
+                  <div className="w-10 h-10 rounded-xl bg-white/10 p-1 flex items-center justify-center shadow-md shrink-0 border border-slate-700/50">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/logos/app_logo.png"
+                      alt="Onboarding Logo"
+                      className="w-full h-full object-contain"
+                    />
                   </div>
                   <div className="text-right">
                     <h3 className="font-bold text-sm text-white leading-tight">

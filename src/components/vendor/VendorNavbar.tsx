@@ -70,8 +70,13 @@ export default function VendorNavbar({ session }: VendorNavbarProps) {
               href="/vendor"
               className="flex items-center gap-2.5 font-bold text-slate-900 hover:text-blue-600 transition"
             >
-              <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm shrink-0">
-                <FileCheck className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-slate-100 p-1 flex items-center justify-center shadow-sm shrink-0 border border-slate-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logos/app_logo.png"
+                  alt="Onboarding Logo"
+                  className="w-full h-full object-contain"
+                />
               </div>
               <span className="text-base sm:text-lg font-bold">מערכת קליטת עובדים</span>
             </Link>
@@ -137,8 +142,13 @@ export default function VendorNavbar({ session }: VendorNavbarProps) {
             <div className="w-80 max-w-[85vw] bg-white border-l border-slate-200 text-slate-900 shadow-2xl flex flex-col justify-between">
               <div className="p-5 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-sm">
-                    <FileCheck className="w-4 h-4" />
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 p-1 flex items-center justify-center shadow-sm shrink-0 border border-slate-200">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/logos/app_logo.png"
+                      alt="Onboarding Logo"
+                      className="w-full h-full object-contain"
+                    />
                   </div>
                   <div>
                     <h3 className="font-bold text-sm text-slate-900 leading-tight">

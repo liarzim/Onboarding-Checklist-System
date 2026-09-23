@@ -187,16 +187,23 @@ function UnifiedIdentificationContent() {
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900 text-slate-100" dir="rtl">
       <div className="max-w-md w-full bg-slate-800 rounded-3xl border border-slate-700 shadow-2xl p-6 sm:p-8 space-y-6">
         {/* Brand / System Logo Header */}
-        <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center mx-auto shadow-lg shadow-blue-500/25">
-            <Shield className="w-7 h-7" />
+        <div className="text-center space-y-3">
+          <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl bg-white/10 p-2 flex items-center justify-center mx-auto shadow-xl shadow-blue-500/10 border border-slate-700/60">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logos/app_logo.png"
+              alt="Onboarding Checklist Logo"
+              className="w-full h-full object-contain"
+            />
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-white">
-            מערכת Onboarding Checklist
-          </h1>
-          <p className="text-xs text-slate-400 font-medium">
-            שער כניסה מאוחד: מנהלי מערכת, משאבי אנוש וספקים
-          </p>
+          <div>
+            <h1 className="text-2xl font-black tracking-tight text-white">
+              מערכת Onboarding Checklist
+            </h1>
+            <p className="text-xs text-slate-400 font-medium mt-1">
+              שער כניסה מאוחד: מנהלי מערכת, משאבי אנוש וספקים
+            </p>
+          </div>
         </div>
 
         {/* Global Error Banner */}
