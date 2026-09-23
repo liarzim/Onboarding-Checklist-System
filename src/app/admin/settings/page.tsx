@@ -34,7 +34,11 @@ import {
   ChevronDown,
   ChevronUp,
   FolderPlus,
+  Eye,
+  FileEdit,
 } from "lucide-react";
+import FormEditorModal from "@/components/forms/FormEditorModal";
+import FormPreviewModal from "@/components/forms/FormPreviewModal";
 import type { SettingStage, DocumentType, Vendor, AdminUser } from "@/types/schema";
 
 const FALLBACK_DOCUMENTS: DocumentType[] = [
@@ -90,6 +94,10 @@ export default function AdminSettingsPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [projects, setProjects] = useState<string[]>(FALLBACK_PROJECTS);
   const [admins, setAdmins] = useState<AdminUser[]>([]);
+
+  // Template Preview & Editor Modals State
+  const [previewModalDocId, setPreviewModalDocId] = useState<string | null>(null);
+  const [editorModalDocId, setEditorModalDocId] = useState<string | null>(null);
 
   // Selected or New Vendor modal/row state
   const [vendorForm, setVendorForm] = useState<Vendor>({
@@ -986,7 +994,8 @@ export default function AdminSettingsPage() {
                         <th className="py-2.5 px-3 font-semibold">סדר</th>
                         <th className="py-2.5 px-3 font-semibold">שם המסמך / טופס</th>
                         <th className="py-2.5 px-3 font-semibold text-center">מסמך חובה?</th>
-                        <th className="py-2.5 px-3 font-semibold">קישור לתבנית ריקה (Google Drive URL)</th>
+                        <th className="py-2.5 px-3 font-semibold text-center">תבנית דיגיטלית / E-Sign</th>
+                        <th className="py-2.5 px-3 font-semibold">קישור לתבנית חיצונית (Drive)</th>
                         <th className="py-2.5 px-3 font-semibold text-center">פעולות</th>
                       </tr>
                     </thead>
@@ -1021,6 +1030,28 @@ export default function AdminSettingsPage() {
                               }}
                               className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
                             />
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setPreviewModalDocId(doc.doc_type_id)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
+                                title="צפה בתבנית הדיגיטלית המלאה עם חתימה"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>תצוגה מקדימה</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditorModalDocId(doc.doc_type_id)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition"
+                                title="החלף סעיפים, ערוך נוסח משפטי או אפס תבנית"
+                              >
+                                <FileEdit className="w-3.5 h-3.5" />
+                                <span>החלף / ערוך</span>
+                              </button>
+                            </div>
                           </td>
                           <td className="py-2 px-3">
                             <div className="flex items-center gap-1.5">
@@ -2330,6 +2361,28 @@ export default function AdminSettingsPage() {
               </div>
             )}
           </>
+        )}
+
+        {/* Template Preview Modal */}
+        {previewModalDocId && (
+          <FormPreviewModal
+            isOpen={!!previewModalDocId}
+            onClose={() => setPreviewModalDocId(null)}
+            docTypeId={previewModalDocId}
+          />
+        )}
+
+        {/* Template Editor & Replacement Modal */}
+        {editorModalDocId && (
+          <FormEditorModal
+            isOpen={!!editorModalDocId}
+            onClose={() => setEditorModalDocId(null)}
+            docTypeId={editorModalDocId}
+            onSaved={() => {
+              // Refresh documents
+              fetchSettings();
+            }}
+          />
         )}
       </div>
     </div>

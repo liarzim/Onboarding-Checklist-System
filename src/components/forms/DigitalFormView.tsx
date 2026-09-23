@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -19,10 +19,15 @@ import {
   CreditCard,
   Briefcase,
   Lock,
+  ArrowLeft,
 } from "lucide-react";
 import SignaturePad from "./SignaturePad";
 import { generatePdfFromElement } from "@/lib/forms/pdfGenerator";
 import { FORM_METADATA_LIST } from "@/lib/forms/formDefinitions";
+import {
+  getFullDocumentInfo,
+  type FullDocumentInfo,
+} from "@/lib/forms/declarationsFullText";
 
 interface CandidateData {
   candidate_id: string;
@@ -38,20 +43,38 @@ interface CandidateData {
 interface DigitalFormViewProps {
   docTypeId: string;
   candidate: CandidateData;
+  onFormSubmitted?: (docTypeId: string) => void;
+  isEmbeddedInPortal?: boolean;
+  nextDocTypeId?: string | null;
+  onNavigateNext?: () => void;
 }
 
 export default function DigitalFormView({
   docTypeId,
   candidate,
+  onFormSubmitted,
+  isEmbeddedInPortal = false,
+  nextDocTypeId = null,
+  onNavigateNext,
 }: DigitalFormViewProps) {
   const router = useRouter();
   const printRef = useRef<HTMLDivElement | null>(null);
 
+  // Dynamic template content loading (supports future replacement/editing)
+  const [docInfo, setDocInfo] = useState<FullDocumentInfo>(() =>
+    getFullDocumentInfo(docTypeId)
+  );
+
+  useEffect(() => {
+    setDocInfo(getFullDocumentInfo(docTypeId));
+  }, [docTypeId]);
+
   const meta = FORM_METADATA_LIST[docTypeId] || {
     docTypeId,
-    title: "טופס קליטה מקוון",
-    subtitle: "מסמך רשמי לקליטת עובד/ספק",
+    title: docInfo.name || "טופס קליטה מקוון",
+    subtitle: docInfo.shortDesc || "מסמך רשמי לקליטת עובד/ספק",
     category: "security",
+    version: docInfo.version || "1.0",
   };
 
   const todayStr = new Date().toLocaleDateString("he-IL", {
@@ -60,20 +83,20 @@ export default function DigitalFormView({
     day: "2-digit",
   });
 
-  // Common and document-specific form state
+  // State
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // doc_1 (Personal Questionnaire Level 5) specific fields
+  // doc_1 fields
   const [q1BirthDate, setQ1BirthDate] = useState("");
   const [q1BirthCountry, setQ1BirthCountry] = useState("ישראל");
   const [q1AliyahYear, setQ1AliyahYear] = useState("");
   const [q1MaritalStatus, setQ1MaritalStatus] = useState("רווק/ה");
   const [q1OtherCitizenship, setQ1OtherCitizenship] = useState("אין");
   const [q1Address, setQ1Address] = useState("");
-  const [q1ArmyService, setQ1ArmyService] = useState("שירות מלא בצה\"ל");
+  const [q1ArmyService, setQ1ArmyService] = useState('שירות מלא בצה"ל');
   const [q1MilitaryId, setQ1MilitaryId] = useState("");
   const [q1MilitaryRole, setQ1MilitaryRole] = useState("");
   const [q1MilitaryYears, setQ1MilitaryYears] = useState("");
@@ -85,17 +108,17 @@ export default function DigitalFormView({
   const [q1Ref1, setQ1Ref1] = useState("");
   const [q1Ref2, setQ1Ref2] = useState("");
 
-  // doc_4 (Criminal Consent) specific fields
+  // doc_4 fields
   const [q4FatherName, setQ4FatherName] = useState("");
   const [q4Address, setQ4Address] = useState("");
 
-  // doc_9 (Smart Card Request) specific fields
+  // doc_9 fields
   const [q9RoleInProject, setQ9RoleInProject] = useState("");
   const [q9ManagerName, setQ9ManagerName] = useState("");
   const [q9AccessLevel, setQ9AccessLevel] = useState("רמת גישה 2 - מתחם משרדים ומעבדות");
   const [q9AccessSites, setQ9AccessSites] = useState("קמפוס מרכזי, בניין פיתוח");
 
-  // Universal acknowledgement checkbox
+  // Acknowledgement checkbox
   const [agreeTerms, setAgreeTerms] = useState(true);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -121,7 +144,7 @@ export default function DigitalFormView({
       setIsSubmitting(true);
 
       // 1. Generate formatted PDF File directly from the rendered form DOM
-      const targetFileName = `${meta.title}.${candidate.full_name}.pdf`;
+      const targetFileName = `${docInfo.name || meta.title}.${candidate.full_name}.pdf`;
       const pdfFile = await generatePdfFromElement(printRef.current, targetFileName);
 
       // 2. Prepare FormData for /api/documents/upload
@@ -143,10 +166,16 @@ export default function DigitalFormView({
 
       setSuccessMessage("הטופס נחתם, הופק ל-PDF ונשמר בהצלחה ב-Google Drive!");
 
-      // Navigate back to checklist after short pause
-      setTimeout(() => {
-        router.push(`/vendor/candidate/${candidate.candidate_id}`);
-      }, 1500);
+      if (onFormSubmitted) {
+        onFormSubmitted(docTypeId);
+      }
+
+      // If embedded in candidate portal and there is a next document, allow next
+      if (!isEmbeddedInPortal) {
+        setTimeout(() => {
+          router.push(`/vendor/candidate/${candidate.candidate_id}`);
+        }, 1500);
+      }
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : "שגיאה בלתי צפויה בהעלאת הטופס"
@@ -157,22 +186,24 @@ export default function DigitalFormView({
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-16">
-      {/* Top Navigation Bar */}
-      <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-        <Link
-          href={`/vendor/candidate/${candidate.candidate_id}`}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-600 transition"
-        >
-          <ArrowRight className="w-4 h-4" />
-          <span>חזרה לצ'קליסט המועמד</span>
-        </Link>
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <span className="font-semibold text-slate-700">{candidate.full_name}</span>
-          <span>•</span>
-          <span>{meta.title}</span>
+    <div className="max-w-4xl mx-auto space-y-6 pb-12" dir="rtl">
+      {/* Top Navigation Bar - only show if not embedded */}
+      {!isEmbeddedInPortal && (
+        <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+          <Link
+            href={`/vendor/candidate/${candidate.candidate_id}`}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-600 transition"
+          >
+            <ArrowRight className="w-4 h-4" />
+            <span>חזרה לצ'קליסט המועמד</span>
+          </Link>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="font-semibold text-slate-700">{candidate.full_name}</span>
+            <span>•</span>
+            <span>{docInfo.name}</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Notifications */}
       {errorMessage && (
@@ -183,9 +214,21 @@ export default function DigitalFormView({
       )}
 
       {successMessage && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-3">
-          <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600" />
-          <span>{successMessage}</span>
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600" />
+            <span className="font-semibold">{successMessage}</span>
+          </div>
+          {isEmbeddedInPortal && onNavigateNext && nextDocTypeId && (
+            <button
+              type="button"
+              onClick={onNavigateNext}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs"
+            >
+              <span>המשך לטופס הבא</span>
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          )}
         </div>
       )}
 
@@ -209,8 +252,18 @@ export default function DigitalFormView({
                 <FileCheck className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-2xl font-black text-slate-900">{meta.title}</h1>
-                <p className="text-sm text-slate-600 font-medium">{meta.subtitle}</p>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-black text-slate-900">{docInfo.name}</h1>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono border border-slate-200">
+                    גרסה {docInfo.version || meta.version || "1.0"}
+                  </span>
+                </div>
+                <p className="text-sm text-slate-600 font-medium">{docInfo.shortDesc}</p>
+                {docInfo.lawReference && (
+                  <p className="text-xs text-blue-700 font-semibold mt-1">
+                    בסיס חוקי: {docInfo.lawReference}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -250,10 +303,9 @@ export default function DigitalFormView({
             </div>
           </div>
 
-          {/* Document Content - Switch based on docTypeId */}
+          {/* Form Specific Inputs & Layout */}
           {docTypeId === "doc_1" && (
             <Doc1PersonalQuestionnaire
-              candidate={candidate}
               birthDate={q1BirthDate}
               setBirthDate={setQ1BirthDate}
               birthCountry={q1BirthCountry}
@@ -288,12 +340,13 @@ export default function DigitalFormView({
               setRef1={setQ1Ref1}
               ref2={q1Ref2}
               setRef2={setQ1Ref2}
+              docInfo={docInfo}
             />
           )}
 
-          {docTypeId === "doc_2" && <Doc2ExamineeLeaflet />}
+          {docTypeId === "doc_2" && <DocClausesOnly docInfo={docInfo} />}
 
-          {docTypeId === "doc_3" && <Doc3SmartCardReceipt candidate={candidate} />}
+          {docTypeId === "doc_3" && <DocClausesOnly docInfo={docInfo} candidate={candidate} />}
 
           {docTypeId === "doc_4" && (
             <Doc4CriminalRecordConsent
@@ -302,16 +355,17 @@ export default function DigitalFormView({
               setFatherName={setQ4FatherName}
               address={q4Address}
               setAddress={setQ4Address}
+              docInfo={docInfo}
             />
           )}
 
-          {docTypeId === "doc_5" && <Doc5ConfidentialityNDA candidate={candidate} />}
+          {docTypeId === "doc_5" && <DocClausesOnly docInfo={docInfo} candidate={candidate} />}
 
-          {docTypeId === "doc_6" && <Doc6PrivacyUndertaking candidate={candidate} />}
+          {docTypeId === "doc_6" && <DocClausesOnly docInfo={docInfo} candidate={candidate} />}
 
-          {docTypeId === "doc_7" && <Doc7ComputerCrimes candidate={candidate} />}
+          {docTypeId === "doc_7" && <DocClausesOnly docInfo={docInfo} candidate={candidate} />}
 
-          {docTypeId === "doc_8" && <Doc8CyberMonitoring candidate={candidate} />}
+          {docTypeId === "doc_8" && <DocClausesOnly docInfo={docInfo} candidate={candidate} />}
 
           {docTypeId === "doc_9" && (
             <Doc9SmartCardRequest
@@ -324,6 +378,7 @@ export default function DigitalFormView({
               setAccessLevel={setQ9AccessLevel}
               accessSites={q9AccessSites}
               setAccessSites={setQ9AccessSites}
+              docInfo={docInfo}
             />
           )}
 
@@ -354,19 +409,25 @@ export default function DigitalFormView({
           {/* Document Footer with Timestamp & Verification Stamp */}
           <div className="pt-6 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-400">
             <span>מזהה מועמד: {candidate.candidate_id}</span>
-            <span>מזהה מסמך: {docTypeId}</span>
-            <span>מסמך דיגיטלי מאובטח</span>
+            <span>מזהה תבנית: {docTypeId}</span>
+            <span>מסמך דיגיטלי מאובטח (E-Sign)</span>
           </div>
         </div>
 
         {/* Action Button Bar */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-          <Link
-            href={`/vendor/candidate/${candidate.candidate_id}`}
-            className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition text-center"
-          >
-            ביטול וחזרה
-          </Link>
+          {!isEmbeddedInPortal ? (
+            <Link
+              href={`/vendor/candidate/${candidate.candidate_id}`}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition text-center"
+            >
+              ביטול וחזרה
+            </Link>
+          ) : (
+            <div className="text-xs text-slate-500">
+              לאחר החתימה יופק קובץ PDF חתום ויישמר בתיקיית ה-Drive
+            </div>
+          )}
 
           <button
             type="submit"
@@ -381,7 +442,7 @@ export default function DigitalFormView({
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                <span>שמור ושלח טופס חתום</span>
+                <span>שמור וחתום על {docInfo.name}</span>
               </>
             )}
           </button>
@@ -392,10 +453,35 @@ export default function DigitalFormView({
 }
 
 // -------------------------------------------------------------
+// Component: Generic Clauses Renderer for Declarations
+// -------------------------------------------------------------
+function DocClausesOnly({
+  docInfo,
+  candidate,
+}: {
+  docInfo: FullDocumentInfo;
+  candidate?: CandidateData;
+}) {
+  return (
+    <div className="space-y-4 text-sm leading-relaxed border border-slate-200 rounded-xl p-6 bg-slate-50/40">
+      <h3 className="font-bold text-slate-900 text-base border-b pb-2">
+        סעיפי ההצהרה והתנאים
+      </h3>
+      <div className="space-y-3 text-slate-700 text-xs sm:text-sm">
+        {docInfo.fullContent.map((clause, idx) => (
+          <p key={idx} className="leading-relaxed">
+            {clause}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
 // Form 1: Personal Questionnaire Level 5
 // -------------------------------------------------------------
 function Doc1PersonalQuestionnaire({
-  candidate,
   birthDate,
   setBirthDate,
   birthCountry,
@@ -430,9 +516,20 @@ function Doc1PersonalQuestionnaire({
   setRef1,
   ref2,
   setRef2,
+  docInfo,
 }: any) {
   return (
     <div className="space-y-6">
+      {/* Questionnaire Instructions & Legal Clauses */}
+      <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-4 space-y-2 text-xs text-blue-900">
+        <h4 className="font-bold text-sm text-blue-950">הוראות מילוי והצהרה:</h4>
+        {docInfo.fullContent.map((clause: string, i: number) => (
+          <p key={i} className="leading-relaxed">
+            {clause}
+          </p>
+        ))}
+      </div>
+
       {/* Section 1: Personal Details */}
       <div className="border border-slate-200 rounded-xl p-5 space-y-4">
         <h3 className="font-bold text-slate-900 text-base border-b pb-2">
@@ -445,7 +542,7 @@ function Doc1PersonalQuestionnaire({
               type="date"
               value={birthDate}
               onChange={(e) => setBirthDate(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
               required
             />
           </div>
@@ -456,7 +553,7 @@ function Doc1PersonalQuestionnaire({
               value={birthCountry}
               onChange={(e) => setBirthCountry(e.target.value)}
               placeholder="למשל: ישראל"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
               required
             />
           </div>
@@ -467,7 +564,7 @@ function Doc1PersonalQuestionnaire({
               value={aliyahYear}
               onChange={(e) => setAliyahYear(e.target.value)}
               placeholder="שנה או ציין 'יליד הארץ'"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
             />
           </div>
           <div>
@@ -475,7 +572,7 @@ function Doc1PersonalQuestionnaire({
             <select
               value={maritalStatus}
               onChange={(e) => setMaritalStatus(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
             >
               <option value="רווק/ה">רווק/ה</option>
               <option value="נשוי/ה">נשוי/ה</option>
@@ -490,7 +587,7 @@ function Doc1PersonalQuestionnaire({
               value={otherCitizenship}
               onChange={(e) => setOtherCitizenship(e.target.value)}
               placeholder="אם אין ציין 'אין'"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
             />
           </div>
           <div className="sm:col-span-3">
@@ -500,7 +597,7 @@ function Doc1PersonalQuestionnaire({
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               placeholder="למשל: תל אביב, רחוב ויצמן 12"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
               required
             />
           </div>
@@ -518,7 +615,7 @@ function Doc1PersonalQuestionnaire({
             <select
               value={armyService}
               onChange={(e) => setArmyService(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
             >
               <option value={'שירות מלא בצה"ל'}>{'שירות מלא בצה"ל'}</option>
               <option value="שירות לאומי/אזרחי">שירות לאומי / אזרחי</option>
@@ -533,7 +630,7 @@ function Doc1PersonalQuestionnaire({
               value={militaryId}
               onChange={(e) => setMilitaryId(e.target.value)}
               placeholder="מספר אישי או מספר תעודה"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
             />
           </div>
           <div>
@@ -543,7 +640,7 @@ function Doc1PersonalQuestionnaire({
               value={militaryRole}
               onChange={(e) => setMilitaryRole(e.target.value)}
               placeholder="תפקיד עיקרי"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
             />
           </div>
           <div>
@@ -553,7 +650,7 @@ function Doc1PersonalQuestionnaire({
               value={militaryYears}
               onChange={(e) => setMilitaryYears(e.target.value)}
               placeholder="למשל: 2018 - 2021"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
             />
           </div>
           {armyService === "פטור משירות" && (
@@ -564,7 +661,7 @@ function Doc1PersonalQuestionnaire({
                 value={exemptionReason}
                 onChange={(e) => setExemptionReason(e.target.value)}
                 placeholder="סיבת פטור (רפואי / גיל / אחר)"
-                className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+                className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
               />
             </div>
           )}
@@ -584,7 +681,7 @@ function Doc1PersonalQuestionnaire({
               value={educationHigh}
               onChange={(e) => setEducationHigh(e.target.value)}
               placeholder="שם בית ספר ושנת סיום"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
             />
           </div>
           <div>
@@ -594,7 +691,7 @@ function Doc1PersonalQuestionnaire({
               value={educationAcademic}
               onChange={(e) => setEducationAcademic(e.target.value)}
               placeholder="מוסד, תחום לימודים, תואר"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
             />
           </div>
         </div>
@@ -613,7 +710,7 @@ function Doc1PersonalQuestionnaire({
               value={workplace1}
               onChange={(e) => setWorkplace1(e.target.value)}
               placeholder="שם מעסיק, תפקיד, שנות העסקה"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
             />
           </div>
           <div>
@@ -623,7 +720,7 @@ function Doc1PersonalQuestionnaire({
               value={workplace2}
               onChange={(e) => setWorkplace2(e.target.value)}
               placeholder="שם מעסיק, תפקיד, שנות העסקה"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
             />
           </div>
         </div>
@@ -642,7 +739,7 @@ function Doc1PersonalQuestionnaire({
               value={ref1}
               onChange={(e) => setRef1(e.target.value)}
               placeholder="שם, טלפון, מקום עבודה"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
               required
             />
           </div>
@@ -653,75 +750,11 @@ function Doc1PersonalQuestionnaire({
               value={ref2}
               onChange={(e) => setRef2(e.target.value)}
               placeholder="שם, טלפון, מקום עבודה"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
               required
             />
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// -------------------------------------------------------------
-// Form 2: Examinee Leaflet
-// -------------------------------------------------------------
-function Doc2ExamineeLeaflet() {
-  return (
-    <div className="space-y-4 text-sm leading-relaxed border border-slate-200 rounded-xl p-6 bg-slate-50/40">
-      <h3 className="font-bold text-slate-900 text-base border-b pb-2">
-        עלון מידע והסבר לנבדק בהליך בדיקת התאמה ביטחונית
-      </h3>
-      <div className="space-y-3 text-slate-700 text-xs sm:text-sm">
-        <p>
-          <strong>1. מטרת ההליך:</strong> בדיקת ההתאמה הביטחונית נועדה לוודא את התאמת המועמד/ת לעבודה בסביבה
-          מסווגת, לשמירה על נכסים חיוניים, ולמניעת חשיפת מידע בעל רגישות ביטחונית או טכנולוגית לגורמים בלתי מורשים.
-        </p>
-        <p>
-          <strong>2. עקרונות הבדיקה:</strong> הבדיקה נערכת בהתאם לחוק, להנחיות הגורם המוסמך, ותוך שמירה מרבית
-          על כבוד האדם, פרטיותו והגינות ההליך. הנתונים שנמסרים ישמשו אך ורק לצורכי קביעת ההתאמה הביטחונית.
-        </p>
-        <p>
-          <strong>3. זכויות הנבדק/ת:</strong> זכותך לקבל הסבר על שלבי ההליך. זכותך להודיע בכל עת על רצונך
-          להפסיק את התהליך (ביטול מועמדות). זכותך לעיין בנתונים שמסרת ולבקש תיקון אם נפלה בהם טעות.
-        </p>
-        <p>
-          <strong>4. חובת מהימנות:</strong> הצלחת הבדיקה מבוססת על אמירת אמת ושיתוף פעולה מלא. מסירת מידע כוזב,
-          חלקי או מטעה עלולה להוביל לפסילת המועמדות באופן מיידי.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// -------------------------------------------------------------
-// Form 3: Smart Card Receipt Declaration
-// -------------------------------------------------------------
-function Doc3SmartCardReceipt({ candidate }: { candidate: CandidateData }) {
-  return (
-    <div className="space-y-4 text-sm leading-relaxed border border-slate-200 rounded-xl p-6 bg-slate-50/40">
-      <h3 className="font-bold text-slate-900 text-base border-b pb-2">
-        הצהרת קבלת כרטיס חכם והתחייבות לשימוש נאות
-      </h3>
-      <div className="space-y-3 text-slate-700 text-xs sm:text-sm">
-        <p>
-          1. הנני מאשר/ת בזאת כי קיבלתי לידיי כרטיס חכם (תג זיהוי אלקטרוני) המיועד לצורך גישה למתקנים, עמדות
-          ומערכות המידע המורשות במסגרת הפרויקט <strong>{candidate.project_id}</strong>.
-        </p>
-        <p>
-          2. ידוע לי כי הכרטיס הינו אישי וסודי. הנני מתחייב/ת שלא להעביר, להשאיל, לשכפל או לאפשר שימוש בכרטיס
-          על ידי אדם אחר, לרבות עובדים או ממונים.
-        </p>
-        <p>
-          3. הנני מתחייב/ת לנקוט בכל אמצעי הזהירות הדרושים לשמירה פיזית ומערכתית על הכרטיס, ולמנוע את אובדנו, גניבתו
-          או פגיעתו.
-        </p>
-        <p>
-          4. במקרה של אובדן, גניבה או תקלה בכרטיס, הנני מתחייב/ת לדווח מיידית לקצין הביטחון ולמנהל הפרויקט.
-        </p>
-        <p>
-          5. עם סיום עבודתי בפרויקט או בהתאם לדרישה ראשונה, אחזיר את הכרטיס לידי הגורם המוסמך ללא שיהוי.
-        </p>
       </div>
     </div>
   );
@@ -736,6 +769,7 @@ function Doc4CriminalRecordConsent({
   setFatherName,
   address,
   setAddress,
+  docInfo,
 }: any) {
   return (
     <div className="space-y-4 text-sm leading-relaxed border border-slate-200 rounded-xl p-6 bg-slate-50/40">
@@ -767,131 +801,11 @@ function Doc4CriminalRecordConsent({
         </div>
       </div>
       <div className="space-y-3 text-slate-700 text-xs sm:text-sm pt-2">
-        <p>
-          בהתאם לחוק המידע הפלילי ותקנת השבים, התשע"ט-2019, הנני נותן/ת בזאת את הסכמתי המפורשת והבלתי חוזרת
-          למשטרת ישראל למסור לידי הגורם המוסמך בארגון מידע מן המרשם הפלילי ורישום משטרתי הנוגע אליי, ככל שנדרש
-          לצורך בדיקת התאמתי לתפקיד בפרויקט <strong>{candidate.project_id}</strong>.
-        </p>
-        <p>
-          הסכמה זו ניתנת מרצוני החופשי, וידוע לי כי המידע יישמר בסודיות מוחלטת וישמש אך ורק לצורך בדיקה זו.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// -------------------------------------------------------------
-// Form 5: Confidentiality Agreement (NDA)
-// -------------------------------------------------------------
-function Doc5ConfidentialityNDA({ candidate }: { candidate: CandidateData }) {
-  return (
-    <div className="space-y-4 text-sm leading-relaxed border border-slate-200 rounded-xl p-6 bg-slate-50/40">
-      <h3 className="font-bold text-slate-900 text-base border-b pb-2">
-        התחייבות לשמירת סודיות ואי גילוי מידע (NDA)
-      </h3>
-      <div className="space-y-3 text-slate-700 text-xs sm:text-sm">
-        <p>
-          1. <strong>הגדרת מידע סודי:</strong> כל מידע בעל אופי טכנולוגי, הנדסי, ביטחוני, תפעולי, מסחרי או ארגוני,
-          לרבות קוד מקור, מפרטים, תוכניות עבודה, נתוני לקוחות ומידע סודי של מדינת ישראל והפרויקט אשר יגיע לידיעתי.
-        </p>
-        <p>
-          2. <strong>חובת סודיות:</strong> הנני מתחייב/ת לשמור על המידע הסודי בסודיות מוחלטת, לא לגלותו, לא למסרו ולא
-          להעבירו לצד שלישי כלשהו, בין במישרין ובין בעקיפין.
-        </p>
-        <p>
-          3. <strong>איסור הוצאת חומרים:</strong> הנני מתחייב/ת שלא להוציא חומרים, קבצים, שרטוטים, קוד או מדיה
-          מחוץ למתקני הפרויקט ללא אישור מפורש ומראש בכתב ממנהל הביטחון.
-        </p>
-        <p>
-          4. <strong>תוקף ההתחייבות:</strong> התחייבותי זו הינה ללא הגבלת זמן ותעמוד בתוקפה המלא גם לאחר סיום עבודתי
-          בפרויקט או סיום ההתקשרות עם חברת <strong>{candidate.vendor_company_name || candidate.vendor_id}</strong>.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// -------------------------------------------------------------
-// Form 6: Privacy Protection Undertaking
-// -------------------------------------------------------------
-function Doc6PrivacyUndertaking({ candidate }: { candidate: CandidateData }) {
-  return (
-    <div className="space-y-4 text-sm leading-relaxed border border-slate-200 rounded-xl p-6 bg-slate-50/40">
-      <h3 className="font-bold text-slate-900 text-base border-b pb-2">
-        התחייבות לעמידה בהוראות חוק הגנת הפרטיות
-      </h3>
-      <div className="space-y-3 text-slate-700 text-xs sm:text-sm">
-        <p>
-          1. הנני מצהיר/ה כי ידועים לי עקרונות חוק הגנת הפרטיות, התשמ"א-1981 ותקנות הגנת הפרטיות (אבטחת מידע),
-          התשע"ז-2017.
-        </p>
-        <p>
-          2. הנני מתחייב/ת לשמור בסודיות מלאה כל מידע אישי, פרטי, רפואי או רגיש אליו איחשף במסגרת ביצוע עבודתי
-          בפרויקט <strong>{candidate.project_id}</strong>.
-        </p>
-        <p>
-          3. לא אעשה כל שימוש במידע אישי ממאגרי המידע אלא אך ורק למטרה שלשמה נמסר המידע ובמסגרת סמכויותיי המוגדרות.
-        </p>
-        <p>
-          4. במקרה של חשש לפגיעה בפרטיות, חשיפה בלתי מורשית או דלף מידע, אדווח מיד לממונה על הגנת הפרטיות ולאחראי
-          האבטחה.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// -------------------------------------------------------------
-// Form 7: Computer Crimes Prevention
-// -------------------------------------------------------------
-function Doc7ComputerCrimes({ candidate }: { candidate: CandidateData }) {
-  return (
-    <div className="space-y-4 text-sm leading-relaxed border border-slate-200 rounded-xl p-6 bg-slate-50/40">
-      <h3 className="font-bold text-slate-900 text-base border-b pb-2">
-        התחייבות להימנעות מעבירות מחשב (חוק המחשבים, התשנ"ה-1995)
-      </h3>
-      <div className="space-y-3 text-slate-700 text-xs sm:text-sm">
-        <p>
-          1. הנני מתחייב/ת שלא לחדור שלא כדין לחומר מחשב, לא לבצע פעולות שיבוש בפעולת מחשב, ולא למחוק או לשנות
-          מידע ללא הרשאה מפורשת.
-        </p>
-        <p>
-          2. הנני מתחייב/ת שלא לחבר למערכות המחשב או לרשת הארגונית התקני זיכרון ניידים (DOK / USB), טלפונים ניידים
-          או כל ציוד היקפי אחר שלא אושר בכתב על ידי אבטחת מידע.
-        </p>
-        <p>
-          3. לא אתקין, לא אוריד ולא אריץ תוכנות, סקריפטים או כלי פריצה/בדיקה ללא אישור מראש.
-        </p>
-        <p>
-          4. ידוע לי כי הפרת הוראות אלו מהווה עבירה פלילית על פי חוק המחשבים, מעבר לעילות פיטורין ונקיטת צעדים
-          משמעתיים.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// -------------------------------------------------------------
-// Form 8: Cyber Monitoring Consent
-// -------------------------------------------------------------
-function Doc8CyberMonitoring({ candidate }: { candidate: CandidateData }) {
-  return (
-    <div className="space-y-4 text-sm leading-relaxed border border-slate-200 rounded-xl p-6 bg-slate-50/40">
-      <h3 className="font-bold text-slate-900 text-base border-b pb-2">
-        כתב הסכמה מדעת לביצוע ניטור, בקרה והגנת סייבר
-      </h3>
-      <div className="space-y-3 text-slate-700 text-xs sm:text-sm">
-        <p>
-          1. הובא לידיעתי כי לצורך הבטחת שלמות המערכות, מניעת מתקפות סייבר, הגנה מפני דלף מידע ואכיפת נהלי
-          אבטחה, הארגון מפעיל אמצעי ניטור, תיעוד, סינון ובקרה על כלל תשתיות המחשוב והתקשורת.
-        </p>
-        <p>
-          2. הנני מביע/ה את הסכמתי לכך שהתעבורה בעמדת העבודה, גלישה באינטרנט, תעבורת דוא"ל ארגוני, ושימוש ברשת
-          ייבדקו ויירשמו ביומני אבטחה (Logs).
-        </p>
-        <p>
-          3. ידוע לי כי המשאבים הממוחשבים מיועדים לצורכי עבודה בלבד ואינם מהווים מרחב פרטי.
-        </p>
+        {docInfo.fullContent.map((clause: string, i: number) => (
+          <p key={i} className="leading-relaxed">
+            {clause}
+          </p>
+        ))}
       </div>
     </div>
   );
@@ -910,6 +824,7 @@ function Doc9SmartCardRequest({
   setAccessLevel,
   accessSites,
   setAccessSites,
+  docInfo,
 }: any) {
   return (
     <div className="space-y-4 text-sm leading-relaxed border border-slate-200 rounded-xl p-6 bg-slate-50/40">
@@ -962,9 +877,13 @@ function Doc9SmartCardRequest({
           />
         </div>
       </div>
-      <p className="text-xs text-slate-500 pt-2">
-        לאחר אישור גורמי הביטחון, יונפק הכרטיס והודעה תועבר לחברת הספק ולמועמד/ת.
-      </p>
+      <div className="space-y-2 text-slate-700 text-xs sm:text-sm pt-2">
+        {docInfo.fullContent.map((clause: string, i: number) => (
+          <p key={i} className="leading-relaxed">
+            {clause}
+          </p>
+        ))}
+      </div>
     </div>
   );
 }

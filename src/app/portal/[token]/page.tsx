@@ -120,6 +120,13 @@ export default async function CandidatePortalPage({ params }: PortalPageProps) {
     console.error("Error resolving vendor name:", err);
   }
 
+  let checklistItems: any[] = [];
+  try {
+    checklistItems = await sheetsRepository.getChecklist(candidate.candidate_id);
+  } catch (err) {
+    console.error("Error fetching checklist items:", err);
+  }
+
   const candidatePayload = {
     candidate_id: candidate.candidate_id,
     full_name: candidate.full_name,
@@ -133,7 +140,11 @@ export default async function CandidatePortalPage({ params }: PortalPageProps) {
 
   return (
     <main className="min-h-screen bg-slate-50/50 py-6 px-4 sm:px-6">
-      <CandidatePortalClient candidate={candidatePayload} token={token} />
+      <CandidatePortalClient
+        candidate={candidatePayload}
+        token={token}
+        initialChecklistItems={checklistItems}
+      />
     </main>
   );
 }

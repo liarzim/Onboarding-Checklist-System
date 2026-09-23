@@ -11,9 +11,7 @@ const PortalSubmitSchema = z.object({
   token: z.string().min(1, "טוקן חסר"),
   candidate_id: z.string().min(1, "מזהה מועמד חסר"),
   full_name: z.string().min(2, "שם מלא חייב להכיל לפחות 2 תווים"),
-  id_number: z.string().refine((val) => isValidIsraeliId(val), {
-    message: "מספר תעודת זהות אינו תקין (ספרת ביקורת שגויה)",
-  }),
+  id_number: z.string().min(5, "מספר תעודת זהות חסר"),
   project_id: z.string().min(1, "שם פרויקט חסר"),
   vendor_company_name: z.string().optional(),
 
