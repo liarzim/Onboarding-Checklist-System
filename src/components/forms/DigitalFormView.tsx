@@ -18,6 +18,7 @@ import {
   getFullDocumentInfo,
   type FullDocumentInfo,
 } from "@/lib/forms/declarationsFullText";
+import MediaUploadCard from "./MediaUploadCard";
 
 interface CandidateData {
   candidate_id: string;
@@ -49,6 +50,19 @@ export default function DigitalFormView({
 }: DigitalFormViewProps) {
   const router = useRouter();
   const printRef = useRef<HTMLDivElement | null>(null);
+
+  // If doc_10 or doc_11, render media upload card
+  if (docTypeId === "doc_10" || docTypeId === "doc_11") {
+    return (
+      <MediaUploadCard
+        docTypeId={docTypeId as "doc_10" | "doc_11"}
+        candidate={candidate}
+        nextDocTypeId={nextDocTypeId}
+        onUploaded={(submittedId) => onFormSubmitted?.(submittedId)}
+        onNavigateNext={onNavigateNext}
+      />
+    );
+  }
 
   // Dynamic template content loading (supports future replacement/editing)
   const [docInfo, setDocInfo] = useState<FullDocumentInfo>(() =>

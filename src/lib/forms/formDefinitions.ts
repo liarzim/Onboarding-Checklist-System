@@ -101,4 +101,22 @@ export const FORM_METADATA_LIST: Record<string, FormMetadata> = {
     version: "2.3",
     isCustomizable: true,
   },
+  doc_10: {
+    docTypeId: "doc_10",
+    title: "צילום תעודת זהות וספח",
+    subtitle: "צילום ברור של תעודת הזהות (ניתן לצרף מספר קבצים/תמונות - קדמי, אחורי וספח)",
+    category: "personal",
+    lawReference: "חוק מרשם האוכלוסין, התשכ\"ה-1965",
+    version: "1.0",
+    isCustomizable: false,
+  },
+  doc_11: {
+    docTypeId: "doc_11",
+    title: "תמונת פספורט רשמית",
+    subtitle: "תמונת פנים עדכנית על רקע בהיר (בסיומת תמונה מורשית בלבד)",
+    category: "access",
+    lawReference: "הנחיות בקרת כניסה והנפקת כרטיסים חכמים",
+    version: "1.0",
+    isCustomizable: false,
+  },
 };

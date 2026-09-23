@@ -36,9 +36,12 @@ import {
   FolderPlus,
   Eye,
   FileEdit,
+  Camera,
+  Image as ImageIcon,
 } from "lucide-react";
 import FormEditorModal from "@/components/forms/FormEditorModal";
 import FormPreviewModal from "@/components/forms/FormPreviewModal";
+import { DEFAULT_UPLOAD_POLICY, type UploadPolicyConfig } from "@/lib/uploadPolicyTypes";
 import type { SettingStage, DocumentType, Vendor, AdminUser } from "@/types/schema";
 
 const FALLBACK_DOCUMENTS: DocumentType[] = [
@@ -51,6 +54,8 @@ const FALLBACK_DOCUMENTS: DocumentType[] = [
   { doc_type_id: "doc_7", doc_name: "הימנעות מעבירות מחשב", is_required: true, order_index: 7, template_drive_url: "" },
   { doc_type_id: "doc_8", doc_name: "הסכמה לניטור סייבר", is_required: true, order_index: 8, template_drive_url: "" },
   { doc_type_id: "doc_9", doc_name: "בקשה להנפקת כרטיס חכם", is_required: true, order_index: 9, template_drive_url: "" },
+  { doc_type_id: "doc_10", doc_name: "צילום תעודת זהות וספח", is_required: true, order_index: 10, template_drive_url: "" },
+  { doc_type_id: "doc_11", doc_name: "תמונת פספורט רשמית", is_required: true, order_index: 11, template_drive_url: "" },
 ];
 
 const FALLBACK_STAGES: SettingStage[] = [
@@ -158,6 +163,15 @@ export default function AdminSettingsPage() {
     overallHealthy: boolean;
   } | null>(null);
 
+  // Upload Policy state (Passport photo allowed extensions & ID card upload settings)
+  const [uploadPolicy, setUploadPolicy] = useState<UploadPolicyConfig>(DEFAULT_UPLOAD_POLICY);
+  const [savingUploadPolicy, setSavingUploadPolicy] = useState(false);
+  const [uploadPolicyMessage, setUploadPolicyMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [customPassportExt, setCustomPassportExt] = useState("");
+
   useEffect(() => {
     // Check URL query parameters or localStorage for active tab
     if (typeof window !== "undefined") {
@@ -192,6 +206,7 @@ export default function AdminSettingsPage() {
 
     fetchSettings();
     fetchGoogleConnection();
+    fetchUploadPolicy();
   }, []);
 
   async function fetchSettings() {
@@ -578,6 +593,100 @@ export default function AdminSettingsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // --- UPLOAD POLICY HANDLERS ---
+  async function fetchUploadPolicy() {
+    try {
+      const res = await fetch("/api/admin/settings/upload-policy");
+      const json = await res.json();
+      if (res.ok && json.success && json.data) {
+        setUploadPolicy(json.data);
+      }
+    } catch {
+      // Fallback to default
+    }
+  }
+
+  async function handleSaveUploadPolicy() {
+    setSavingUploadPolicy(true);
+    setUploadPolicyMessage(null);
+    try {
+      const res = await fetch("/api/admin/settings/upload-policy", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(uploadPolicy),
+      });
+      const json = await res.json();
+      if (res.ok && json.success && json.data) {
+        setUploadPolicy(json.data);
+        setUploadPolicyMessage({
+          type: "success",
+          text: "מדיניות סיומות התמונה והקבצים עודכנה ונשמרה בהצלחה!",
+        });
+      } else {
+        setUploadPolicyMessage({
+          type: "error",
+          text: json.message || "שגיאה בעדכון מדיניות סיומות הקבצים",
+        });
+      }
+    } catch {
+      setUploadPolicyMessage({
+        type: "error",
+        text: "שגיאת תקשורת בשמירת מדיניות העלאת קבצים",
+      });
+    } finally {
+      setSavingUploadPolicy(false);
+    }
+  }
+
+  function togglePassportExt(ext: string) {
+    const current = uploadPolicy.passport_photo?.allowed_extensions || [];
+    const normalized = ext.toLowerCase().startsWith(".") ? ext.toLowerCase() : `.${ext.toLowerCase()}`;
+    const exists = current.includes(normalized);
+    let next: string[];
+    if (exists) {
+      if (current.length <= 1) return; // Must have at least 1 extension
+      next = current.filter((e) => e !== normalized);
+    } else {
+      next = [...current, normalized];
+    }
+    setUploadPolicy({
+      ...uploadPolicy,
+      passport_photo: {
+        ...uploadPolicy.passport_photo,
+        allowed_extensions: next,
+      },
+    });
+  }
+
+  function addCustomPassportExt() {
+    if (!customPassportExt.trim()) return;
+    const clean = customPassportExt.trim().toLowerCase();
+    const formatted = clean.startsWith(".") ? clean : `.${clean}`;
+    const current = uploadPolicy.passport_photo?.allowed_extensions || [];
+    if (!current.includes(formatted)) {
+      setUploadPolicy({
+        ...uploadPolicy,
+        passport_photo: {
+          ...uploadPolicy.passport_photo,
+          allowed_extensions: [...current, formatted],
+        },
+      });
+    }
+    setCustomPassportExt("");
+  }
+
+  function removePassportExt(extToRemove: string) {
+    const current = uploadPolicy.passport_photo?.allowed_extensions || [];
+    if (current.length <= 1) return;
+    setUploadPolicy({
+      ...uploadPolicy,
+      passport_photo: {
+        ...uploadPolicy.passport_photo,
+        allowed_extensions: current.filter((e) => e !== extToRemove),
+      },
+    });
   }
 
   // --- VENDORS HANDLERS ---
@@ -1032,26 +1141,39 @@ export default function AdminSettingsPage() {
                             />
                           </td>
                           <td className="py-2 px-3 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => setPreviewModalDocId(doc.doc_type_id)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
-                                title="צפה בתבנית הדיגיטלית המלאה עם חתימה"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>תצוגה מקדימה</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEditorModalDocId(doc.doc_type_id)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition"
-                                title="החלף סעיפים, ערוך נוסח משפטי או אפס תבנית"
-                              >
-                                <FileEdit className="w-3.5 h-3.5" />
-                                <span>החלף / ערוך</span>
-                              </button>
-                            </div>
+                            {doc.doc_type_id === "doc_10" || doc.doc_type_id === "doc_11" ? (
+                              <div className="flex items-center justify-center">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg">
+                                  <Camera className="w-3.5 h-3.5" />
+                                  <span>
+                                    {doc.doc_type_id === "doc_11"
+                                      ? "העלאת תמונת פספורט"
+                                      : "צילום והעלאת קבצי ת.ז."}
+                                  </span>
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewModalDocId(doc.doc_type_id)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
+                                  title="צפה בתבנית הדיגיטלית המלאה עם חתימה"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>תצוגה מקדימה</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditorModalDocId(doc.doc_type_id)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition"
+                                  title="החלף סעיפים, ערוך נוסח משפטי או אפס תבנית"
+                                >
+                                  <FileEdit className="w-3.5 h-3.5" />
+                                  <span>החלף / ערוך</span>
+                                </button>
+                              </div>
+                            )}
                           </td>
                           <td className="py-2 px-3">
                             <div className="flex items-center gap-1.5">
@@ -1093,6 +1215,273 @@ export default function AdminSettingsPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                {/* ADMIN FILE & IMAGE EXTENSION POLICY CARD */}
+                <div className="bg-slate-50/70 border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shrink-0">
+                        <ImageIcon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-800">
+                          הגדרות מדיניות סיומות קבצים ותמונות מורשות
+                        </h3>
+                        <p className="text-xs text-slate-500">
+                          שליטת מנהל מערכת על סיומות התמונה המאושרות לתמונת פספורט (שלב 11) ומסמכי תעודת זהות (שלב 10)
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveUploadPolicy}
+                      disabled={savingUploadPolicy}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition disabled:opacity-50 shadow-sm shrink-0"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{savingUploadPolicy ? "שומר מדיניות..." : "שמור הגדרות סיומות"}</span>
+                    </button>
+                  </div>
+
+                  {uploadPolicyMessage && (
+                    <div
+                      className={`p-3.5 rounded-xl text-xs flex items-center gap-2 border ${
+                        uploadPolicyMessage.type === "success"
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                          : "bg-rose-50 text-rose-800 border-rose-200"
+                      }`}
+                    >
+                      {uploadPolicyMessage.type === "success" ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      )}
+                      <span>{uploadPolicyMessage.text}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    {/* Section 1: Passport Photo Image Policy */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                          <h4 className="text-xs font-bold text-slate-800">
+                            תמונת פספורט רשמית (שלב 11) - סיומות תמונה מורשות
+                          </h4>
+                        </div>
+                        <span className="text-[11px] text-slate-400 font-mono">חובה קובץ תמונה</span>
+                      </div>
+
+                      <p className="text-xs text-slate-500">
+                        בחר את סיומות קובצי התמונה המותרות להעלאה. מועמדים לא יוכלו להעלות קובץ בסיומת שאינה מאושרת:
+                      </p>
+
+                      {/* Quick Toggle Checkboxes */}
+                      <div className="flex flex-wrap gap-2">
+                        {[".jpg", ".jpeg", ".png", ".webp", ".heic", ".bmp", ".tiff"].map((ext) => {
+                          const isChecked = (uploadPolicy.passport_photo?.allowed_extensions || []).includes(ext);
+                          return (
+                            <button
+                              key={ext}
+                              type="button"
+                              onClick={() => togglePassportExt(ext)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition border ${
+                                isChecked
+                                  ? "bg-blue-50 text-blue-700 border-blue-300 shadow-xs"
+                                  : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
+                              }`}
+                            >
+                              <span className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[10px] ${
+                                isChecked ? "bg-blue-600 text-white" : "border border-slate-300"
+                              }`}>
+                                {isChecked && "✓"}
+                              </span>
+                              <span>{ext}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Active Allowed Extensions Chips */}
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[11px] text-slate-500 font-medium">סיומות מורשות כעת:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(uploadPolicy.passport_photo?.allowed_extensions || []).map((ext) => (
+                            <span
+                              key={ext}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-md text-[11px] font-mono font-bold"
+                            >
+                              <span>{ext}</span>
+                              <button
+                                type="button"
+                                onClick={() => removePassportExt(ext)}
+                                className="text-indigo-400 hover:text-rose-600 transition"
+                                title={`הסר סיומת ${ext}`}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Add Custom Extension */}
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={customPassportExt}
+                          onChange={(e) => setCustomPassportExt(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addCustomPassportExt();
+                            }
+                          }}
+                          placeholder="הוסף סיומת נוספת (למשל: avif)"
+                          className="flex-1 text-xs border border-slate-300 rounded-lg px-3 py-1.5 bg-white focus:ring-1 focus:ring-indigo-500 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={addCustomPassportExt}
+                          className="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition"
+                        >
+                          הוסף
+                        </button>
+                      </div>
+
+                      {/* Max size config */}
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                        <label className="text-xs text-slate-600 font-medium">
+                          גודל קובץ מקסימלי לתמונה (MB):
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={uploadPolicy.passport_photo?.max_size_mb || 5}
+                          onChange={(e) =>
+                            setUploadPolicy({
+                              ...uploadPolicy,
+                              passport_photo: {
+                                ...uploadPolicy.passport_photo,
+                                max_size_mb: Math.max(1, Number(e.target.value) || 5),
+                              },
+                            })
+                          }
+                          className="w-20 text-xs text-center border border-slate-300 rounded-lg px-2 py-1 font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Section 2: ID Card Upload Policy */}
+                    <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+                          <h4 className="text-xs font-bold text-slate-800">
+                            צילום תעודת זהות וספח (שלב 10) - תמונות וקבצים
+                          </h4>
+                        </div>
+                        <span className="text-[11px] text-slate-400 font-mono">תמונות / PDF</span>
+                      </div>
+
+                      <p className="text-xs text-slate-500">
+                        מועמדים יכולים להעלות מספר קבצים או תמונות (קדמי, אחורי וספח). הגדר את המגבלות:
+                      </p>
+
+                      {/* Allowed Extensions for ID */}
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] text-slate-500 font-medium">סיומות מורשות לתעודת זהות:</span>
+                        <div className="flex flex-wrap gap-2">
+                          {[".jpg", ".jpeg", ".png", ".webp", ".pdf"].map((ext) => {
+                            const isChecked = (uploadPolicy.id_card?.allowed_extensions || []).includes(ext);
+                            return (
+                              <button
+                                key={ext}
+                                type="button"
+                                onClick={() => {
+                                  const current = uploadPolicy.id_card?.allowed_extensions || [];
+                                  const next = isChecked
+                                    ? current.filter((e) => e !== ext)
+                                    : [...current, ext];
+                                  if (next.length === 0) return;
+                                  setUploadPolicy({
+                                    ...uploadPolicy,
+                                    id_card: {
+                                      ...uploadPolicy.id_card,
+                                      allowed_extensions: next,
+                                    },
+                                  });
+                                }}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition border ${
+                                  isChecked
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-300 shadow-xs"
+                                    : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
+                                }`}
+                              >
+                                <span className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[10px] ${
+                                  isChecked ? "bg-emerald-600 text-white" : "border border-slate-300"
+                                }`}>
+                                  {isChecked && "✓"}
+                                </span>
+                                <span>{ext}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Max files and Max size */}
+                      <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs text-slate-600 font-medium">
+                            מספר קבצים מרבי מותר (חלקים/עמודים):
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={10}
+                            value={uploadPolicy.id_card?.max_files || 5}
+                            onChange={(e) =>
+                              setUploadPolicy({
+                                ...uploadPolicy,
+                                id_card: {
+                                  ...uploadPolicy.id_card,
+                                  max_files: Math.max(1, Number(e.target.value) || 5),
+                                },
+                              })
+                            }
+                            className="w-20 text-xs text-center border border-slate-300 rounded-lg px-2 py-1 font-mono font-bold"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs text-slate-600 font-medium">
+                            גודל קובץ מרבי לקובץ ת.ז. (MB):
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={50}
+                            value={uploadPolicy.id_card?.max_size_mb || 10}
+                            onChange={(e) =>
+                              setUploadPolicy({
+                                ...uploadPolicy,
+                                id_card: {
+                                  ...uploadPolicy.id_card,
+                                  max_size_mb: Math.max(1, Number(e.target.value) || 10),
+                                },
+                              })
+                            }
+                            className="w-20 text-xs text-center border border-slate-300 rounded-lg px-2 py-1 font-mono font-bold"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

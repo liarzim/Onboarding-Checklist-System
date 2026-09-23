@@ -44,17 +44,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. Verify Vendor Session
-    const session = await getVendorSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // 2. Parse Multipart Form Data
+    // 1. Verify Vendor Session OR Candidate Token
     const formData = await request.formData();
     const file = formData.get("file");
     const candidateId = formData.get("candidate_id");
     const docTypeId = formData.get("doc_type_id");
+    const token =
+      (formData.get("token") as string | null) ||
+      request.headers.get("x-candidate-token");
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json(
@@ -77,50 +74,140 @@ export async function POST(request: Request) {
       );
     }
 
-    // 3. Validate File Type (PDF Only)
+    const session = await getVendorSession();
+    let candidate: any = null;
+    let actorEmail = "candidate@portal";
+    let actorRole: "Vendor" | "Admin" = "Vendor";
+
+    if (token) {
+      const candidateByToken = await sheetsRepository.getCandidateByToken(token);
+      if (!candidateByToken || candidateByToken.candidate_id !== candidateId) {
+        return NextResponse.json(
+          { error: "Forbidden", message: "טוקן מועמד אינו תקין או פג תוקף" },
+          { status: 403 }
+        );
+      }
+      candidate = candidateByToken;
+      actorEmail = candidateByToken.email;
+    } else if (session) {
+      candidate = await assertVendorOwnership(session.vendor_id, candidateId);
+      actorEmail = session.email;
+    } else {
+      return NextResponse.json(
+        { error: "Unauthorized", message: "נדרשת הזדהות ספק או טוקן מועמד תקין" },
+        { status: 401 }
+      );
+    }
+
+    // 2. Validate File Type based on docTypeId & Admin Upload Policy
+    const {
+      getUploadPolicy,
+      isPassportPhotoExtensionAllowed,
+      isIdCardExtensionAllowed,
+      getFileExtension,
+    } = await import("@/lib/uploadPolicy");
+    const policy = getUploadPolicy();
     const fileNameLower = file.name.toLowerCase();
-    const isPdfMime = file.type === "application/pdf";
-    const isPdfExt = fileNameLower.endsWith(".pdf");
+    const ext = getFileExtension(file.name);
 
-    if (!isPdfMime && !isPdfExt) {
-      return NextResponse.json(
-        {
-          error: "Validation Error",
-          message: "רק קבצים בפורמט PDF מורשים להעלאה במערכת",
-        },
-        { status: 400 }
-      );
+    if (docTypeId === "doc_11") {
+      // Passport photo: Strictly images with allowed extensions defined by Admin
+      const extCheck = isPassportPhotoExtensionAllowed(file.name, policy);
+      if (!extCheck.allowed) {
+        return NextResponse.json(
+          {
+            error: "Validation Error",
+            message: `סיומת הקובץ "${extCheck.ext || "ללא סיומת"}" אינה מורשית עבור תמונת פספורט. סיומות תמונה מורשות ע"י המנהל: ${extCheck.allowedExtensions.join(", ")}`,
+          },
+          { status: 400 }
+        );
+      }
+
+      if (!file.type.startsWith("image/")) {
+        return NextResponse.json(
+          {
+            error: "Validation Error",
+            message: "חובה להעלות קובץ תמונה בלבד עבור תמונת פספורט",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (file.size > policy.passport_photo.max_size_mb * 1024 * 1024) {
+        return NextResponse.json(
+          {
+            error: "Validation Error",
+            message: `גודל התמונה חורג מהמקסימום המותר (${policy.passport_photo.max_size_mb}MB)`,
+          },
+          { status: 400 }
+        );
+      }
+    } else if (docTypeId === "doc_10") {
+      // ID card: Images or PDF with allowed extensions
+      const extCheck = isIdCardExtensionAllowed(file.name, policy);
+      if (!extCheck.allowed) {
+        return NextResponse.json(
+          {
+            error: "Validation Error",
+            message: `סיומת הקובץ "${extCheck.ext || "ללא סיומת"}" אינה מורשית עבור תעודת זהות. סיומות מורשות: ${extCheck.allowedExtensions.join(", ")}`,
+          },
+          { status: 400 }
+        );
+      }
+
+      if (file.size > policy.id_card.max_size_mb * 1024 * 1024) {
+        return NextResponse.json(
+          {
+            error: "Validation Error",
+            message: `גודל הקובץ חורג מהמקסימום המותר (${policy.id_card.max_size_mb}MB)`,
+          },
+          { status: 400 }
+        );
+      }
+    } else {
+      // Standard forms (doc_1 to doc_9)
+      const isPdfMime = file.type === "application/pdf";
+      const isPdfExt = fileNameLower.endsWith(".pdf");
+
+      if (!isPdfMime && !isPdfExt) {
+        return NextResponse.json(
+          {
+            error: "Validation Error",
+            message: "רק קבצים בפורמט PDF מורשים להעלאה במערכת עבור טפסים חתומים",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json(
+          {
+            error: "Validation Error",
+            message: "גודל הקובץ חורג מהמגבלה המותרת (מקסימום 10MB)",
+          },
+          { status: 400 }
+        );
+      }
     }
 
-    // 4. Validate File Size (Max 10MB)
-    if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json(
-        {
-          error: "Validation Error",
-          message: "גודל הקובץ חורג מהמגבלה המותרת (מקסימום 10MB)",
-        },
-        { status: 400 }
-      );
-    }
-
-    // 5. Convert File to Buffer and Verify PDF Magic Bytes (Deep Content Inspection)
+    // 3. Convert File to Buffer
     const arrayBuffer = await file.arrayBuffer();
     const fileBuffer = Buffer.from(arrayBuffer);
 
-    if (!isValidPdfMagicBytes(fileBuffer)) {
-      return NextResponse.json(
-        {
-          error: "Validation Error",
-          message: "תוכן הקובץ אינו קובץ PDF תקין (חתימת קובץ שגויה)",
-        },
-        { status: 400 }
-      );
+    // Deep Content Inspection for PDFs only
+    if (docTypeId !== "doc_11" && file.type === "application/pdf") {
+      if (!isValidPdfMagicBytes(fileBuffer)) {
+        return NextResponse.json(
+          {
+            error: "Validation Error",
+            message: "תוכן הקובץ אינו קובץ PDF תקין (חתימת קובץ שגויה)",
+          },
+          { status: 400 }
+        );
+      }
     }
 
-    // 6. Check Multi-Tenant Ownership Guard
-    const candidate = await assertVendorOwnership(session.vendor_id, candidateId);
-
-    // 7. Fetch Document Type & Vendor Company Name
+    // 4. Fetch Document Type & Vendor Company Name
     const docTypes = await sheetsRepository.getDocumentTypes();
     const docType = docTypes.find((d) => d.doc_type_id === docTypeId);
 
@@ -131,30 +218,44 @@ export async function POST(request: Request) {
       );
     }
 
-    let vendorCompanyName = session.company_name;
-    const vendorRecord = await sheetsRepository.getVendorById(candidate.vendor_id);
-    if (vendorRecord && vendorRecord.company_name) {
-      vendorCompanyName = vendorRecord.company_name;
+    let vendorCompanyName = candidate.vendor_company_name || "";
+    try {
+      const vendorRecord = await sheetsRepository.getVendorById(candidate.vendor_id);
+      if (vendorRecord && vendorRecord.company_name) {
+        vendorCompanyName = vendorRecord.company_name;
+      }
+    } catch {
+      // Ignore
     }
 
-    // 8. Construct Exact Standardized File Name:
-    // [שם המסמך].[שם המועמד].[פרוייקט מיועד].[חברת המועמד].pdf
+    // 5. Construct Standardized File Name
+    const customFileName = formData.get("custom_file_name") as string | null;
     const cleanDocName = sanitizeFileNamePart(docType.doc_name);
     const cleanCandidateName = sanitizeFileNamePart(candidate.full_name);
-    const cleanProjectName = sanitizeFileNamePart(candidate.project_id);
-    const cleanCompanyName = sanitizeFileNamePart(vendorCompanyName);
+    const cleanProjectName = sanitizeFileNamePart(candidate.project_id || "פרויקט");
+    const cleanCompanyName = sanitizeFileNamePart(vendorCompanyName || "ספק");
 
-    const standardizedFileName = `${cleanDocName}.${cleanCandidateName}.${cleanProjectName}.${cleanCompanyName}.pdf`;
+    let standardizedFileName = "";
+    if (customFileName) {
+      standardizedFileName = sanitizeFileNamePart(customFileName);
+    } else if (docTypeId === "doc_11") {
+      standardizedFileName = `תמונת פספורט - ${cleanCandidateName}${ext}`;
+    } else if (docTypeId === "doc_10") {
+      standardizedFileName = `צילום תעודת זהות - ${cleanCandidateName}${ext}`;
+    } else {
+      standardizedFileName = `${cleanDocName}.${cleanCandidateName}.${cleanProjectName}.${cleanCompanyName}.pdf`;
+    }
 
-    // 9. Upload to Candidate Google Drive Folder with overwrite
+    // 6. Upload to Candidate Google Drive Folder with overwrite
+    const mimeType = file.type || (ext === ".pdf" ? "application/pdf" : "image/jpeg");
     const { fileId, webViewLink } = await uploadFileToCandidateFolder(
       candidate.drive_folder_id,
       standardizedFileName,
       fileBuffer,
-      "application/pdf"
+      mimeType
     );
 
-    // 10. Update Candidate Checklist Item in Sheets
+    // 7. Update Candidate Checklist Item in Sheets
     await sheetsRepository.updateChecklistItem(candidateId, docTypeId, {
       status: "Uploaded",
       file_name: standardizedFileName,
@@ -162,17 +263,17 @@ export async function POST(request: Request) {
       file_drive_url: webViewLink,
     });
 
-    // 11. Append Event to Audit Log
+    // 8. Append Event to Audit Log
     const now = new Date().toISOString();
     const auditEntry: AuditLogEntry = {
       log_id: `log_${Date.now()}`,
       timestamp: now,
-      actor_email: session.email,
-      actor_role: "Vendor",
+      actor_email: actorEmail,
+      actor_role: actorRole,
       action_type: "UPLOAD_DOCUMENT",
       entity_type: "ChecklistItem",
       entity_id: `${candidateId}_${docTypeId}`,
-      details: `Vendor ${session.company_name} uploaded document "${standardizedFileName}" for candidate ${candidate.full_name} (${candidateId})`,
+      details: `${actorEmail} העלה את המסמך "${standardizedFileName}" עבור ${candidate.full_name} (${candidateId})`,
     };
     await sheetsRepository.appendAuditLog(auditEntry);
 

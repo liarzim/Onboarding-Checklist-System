@@ -20,6 +20,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import DigitalFormView from "@/components/forms/DigitalFormView";
+import MediaUploadCard from "@/components/forms/MediaUploadCard";
 import { FORM_METADATA_LIST } from "@/lib/forms/formDefinitions";
 import { getFullDocumentInfo } from "@/lib/forms/declarationsFullText";
 
@@ -53,6 +54,8 @@ const ALL_DOC_IDS = [
   "doc_7",
   "doc_8",
   "doc_9",
+  "doc_10",
+  "doc_11",
 ];
 
 export default function CandidatePortalClient({
@@ -156,7 +159,7 @@ export default function CandidatePortalClient({
   }
 
   // Celebratory final completion screen
-  if (isFinalSubmitted || (isAllCompleted && completedDocIds.size >= 9)) {
+  if (isFinalSubmitted || (isAllCompleted && completedDocIds.size >= ALL_DOC_IDS.length)) {
     return (
       <div
         className="max-w-2xl mx-auto my-12 p-8 sm:p-12 bg-white border border-emerald-200 rounded-3xl shadow-xl text-center space-y-6"
@@ -167,21 +170,20 @@ export default function CandidatePortalClient({
         </div>
         <div className="space-y-2">
           <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-            תהליך החתימה הושלם במלואו (100%)
+            תהליך הקליטה הושלם במלואו (100%)
           </span>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900">
-            כל 9 טפסי הקליטה נחתמו בהצלחה!
+            כל 11 שלבי הקליטה הושלמו בהצלחה!
           </h1>
           <p className="text-sm text-slate-600 max-w-lg mx-auto leading-relaxed">
-            שלום {candidate.full_name}, כל 9 הטפסים הרשמיים נחתמו בחתימתך הדיגיטלית,
-            הופקו לקבצי PDF באיכות גבוהה ונשמרו בתיקיית ה-Google Drive האישית שלך.
+            שלום {candidate.full_name}, כל 11 המסמכים, הטפסים הרשמיים, תמונת הפספורט וצילומי תעודת הזהות נבדקו ונשמרו בהצלחה בתיקיית ה-Google Drive שלך.
           </p>
         </div>
 
-        {/* 9 Documents Summary List */}
+        {/* 11 Documents Summary List */}
         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-right space-y-2.5">
           <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-            רשימת המסמכים שנחתמו והועלו ל-Drive:
+            רשימת המסמכים, הטפסים והקבצים שהועלו ל-Drive:
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
             {ALL_DOC_IDS.map((id, idx) => {
@@ -234,12 +236,12 @@ export default function CandidatePortalClient({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-black text-slate-900">
-                  פורטל קליטת מועמד - 9 טפסי קליטה
+                  פורטל קליטת מועמד - 11 שלבי קליטה ומסמכים
                 </h1>
               </div>
               <p className="text-xs sm:text-sm text-slate-500">
                 שלום <strong className="text-slate-800">{candidate.full_name}</strong>,
-                לפניך 9 טפסים רשמיים למילוי וחתימה אלקטרונית (E-Sign).
+                לפניך 11 שלבי קליטה למילוי וחתימה אלקטרונית (E-Sign), צילום ת.ז. ותמונת פספורט.
               </p>
             </div>
           </div>
@@ -357,17 +359,29 @@ export default function CandidatePortalClient({
         </div>
       </div>
 
-      {/* Selected Form Component View */}
+      {/* Selected Form or Media Upload Component View */}
       <div className="pt-2">
-        <DigitalFormView
-          key={selectedDocId}
-          docTypeId={selectedDocId}
-          candidate={candidate}
-          isEmbeddedInPortal={true}
-          nextDocTypeId={nextPendingDocId}
-          onFormSubmitted={(submittedId) => handleFormSubmitted(submittedId)}
-          onNavigateNext={handleNavigateNext}
-        />
+        {selectedDocId === "doc_10" || selectedDocId === "doc_11" ? (
+          <MediaUploadCard
+            key={selectedDocId}
+            docTypeId={selectedDocId as "doc_10" | "doc_11"}
+            candidate={candidate}
+            token={token}
+            nextDocTypeId={nextPendingDocId}
+            onUploaded={(submittedId) => handleFormSubmitted(submittedId)}
+            onNavigateNext={handleNavigateNext}
+          />
+        ) : (
+          <DigitalFormView
+            key={selectedDocId}
+            docTypeId={selectedDocId}
+            candidate={candidate}
+            isEmbeddedInPortal={true}
+            nextDocTypeId={nextPendingDocId}
+            onFormSubmitted={(submittedId) => handleFormSubmitted(submittedId)}
+            onNavigateNext={handleNavigateNext}
+          />
+        )}
       </div>
     </div>
   );

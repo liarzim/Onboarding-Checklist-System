@@ -32,6 +32,8 @@ export const DEFAULT_REQUIRED_DOCUMENTS: Omit<DocumentType, "template_drive_url"
   { doc_type_id: "doc_7", doc_name: "הימנעות מעבירות מחשב", is_required: true, order_index: 7 },
   { doc_type_id: "doc_8", doc_name: "הסכמה לניטור סייבר", is_required: true, order_index: 8 },
   { doc_type_id: "doc_9", doc_name: "בקשה להנפקת כרטיס חכם", is_required: true, order_index: 9 },
+  { doc_type_id: "doc_10", doc_name: "צילום תעודת זהות וספח", is_required: true, order_index: 10 },
+  { doc_type_id: "doc_11", doc_name: "תמונת פספורט רשמית", is_required: true, order_index: 11 },
 ];
 
 export const DEFAULT_SETTING_STAGES: SettingStage[] = [
@@ -370,13 +372,27 @@ export class SheetsRepository {
         }));
       }
 
-      return validRows.map((row) => ({
+      const existingDocIds = new Set(validRows.map((r) => String(r[0] || "").trim()));
+      const parsedDocs: DocumentType[] = validRows.map((row) => ({
         doc_type_id: String(row[0] || ""),
         doc_name: String(row[1] || ""),
         is_required: String(row[2] ?? "").toUpperCase() === "TRUE",
         template_drive_url: row[3] ? String(row[3]) : null,
         order_index: Number(row[4] || 0),
       }));
+
+      // Ensure doc_10 and doc_11 exist even if the sheet was initialized previously
+      DEFAULT_REQUIRED_DOCUMENTS.forEach((defDoc) => {
+        if (!existingDocIds.has(defDoc.doc_type_id)) {
+          parsedDocs.push({
+            ...defDoc,
+            template_drive_url: null,
+          });
+        }
+      });
+
+      parsedDocs.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+      return parsedDocs;
     } catch {
       return DEFAULT_REQUIRED_DOCUMENTS.map((doc) => ({
         ...doc,

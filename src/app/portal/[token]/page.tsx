@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "פורטל קליטת מועמד | Onboarding Checklist System",
-  description: "מילוי, אימות וחתימה אלקטרונית על 9 טפסי קליטה רשמיים",
+  description: "מילוי, אימות וחתימה אלקטרונית על 11 שלבי קליטה, טפסים ומסמכים מזהים",
 };
 
 interface PortalPageProps {

@@ -16,6 +16,8 @@ import {
   User,
   ShieldAlert,
   PenTool,
+  Camera,
+  Image as ImageIcon,
 } from "lucide-react";
 
 interface CandidateInfo {
@@ -90,14 +92,40 @@ export default function CandidateChecklistPage() {
     if (!file) return;
     setUploadMessage(null);
 
-    // Client-side validation
-    if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
-      setUploadMessage({
-        type: "error",
-        text: "שגיאה: רק קבצי PDF מורשים להעלאה במערכת.",
-        docId: docTypeId,
-      });
-      return;
+    // Client-side validation per document type
+    const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+
+    if (docTypeId === "doc_11") {
+      // Passport photo must be an image
+      const allowedImageExts = [".jpg", ".jpeg", ".png", ".webp", ".heic", ".bmp"];
+      if (!allowedImageExts.includes(ext) || !file.type.startsWith("image/")) {
+        setUploadMessage({
+          type: "error",
+          text: `שגיאה: לתמונת פספורט מורשים רק קובצי תמונה (${allowedImageExts.join(", ")}).`,
+          docId: docTypeId,
+        });
+        return;
+      }
+    } else if (docTypeId === "doc_10") {
+      // ID card allows images or PDF
+      const allowedIdExts = [".jpg", ".jpeg", ".png", ".webp", ".pdf"];
+      if (!allowedIdExts.includes(ext) && file.type !== "application/pdf" && !file.type.startsWith("image/")) {
+        setUploadMessage({
+          type: "error",
+          text: `שגיאה: לצילום תעודת זהות מורשים רק קובצי תמונה או PDF (${allowedIdExts.join(", ")}).`,
+          docId: docTypeId,
+        });
+        return;
+      }
+    } else {
+      if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
+        setUploadMessage({
+          type: "error",
+          text: "שגיאה: רק קבצי PDF מורשים להעלאה עבור טופס זה.",
+          docId: docTypeId,
+        });
+        return;
+      }
     }
 
     if (file.size > 10 * 1024 * 1024) {
@@ -266,7 +294,7 @@ export default function CandidateChecklistPage() {
             </div>
             <p className="text-[11px] text-slate-500 mt-2">
               {uploadedCount === totalCount
-                ? "כל 9 מסמכי החובה הועלו בהצלחה!"
+                ? `כל ${totalCount} מסמכי ושלבי החובה הושלמו בהצלחה!`
                 : `נותרו ${totalCount - uploadedCount} מסמכים להעלאה`}
             </p>
           </div>
@@ -299,14 +327,14 @@ export default function CandidateChecklistPage() {
         </div>
       )}
 
-      {/* 9 Documents Checklist */}
+      {/* Documents & Media Checklist */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-900">
-            9 מסמכי חובה לקליטה
+            {totalCount} מסמכי חובה ושלבי קליטה
           </h2>
           <span className="text-xs text-slate-500">
-            מבנה שם קובץ אוטומטי: [שם המסמך].[שם המועמד].[פרויקט].[ספק].pdf
+            שמירה מאובטחת ומסודרת ב-Google Drive
           </span>
         </div>
 
@@ -447,9 +475,9 @@ function DocumentRow({ candidateId, item, index, isUploading, onUpload }: Docume
           </div>
         </div>
 
-        {/* Dual Actions: Fill Online Form or Upload Scanned PDF */}
+        {/* Dual Actions: Fill Online Form / Upload Media or Upload File */}
         <div className="flex flex-wrap items-center gap-2 self-end md:self-center">
-          {/* Digital Interactive Form Link */}
+          {/* Digital Interactive Form or Camera Upload Link */}
           <Link
             href={`/vendor/candidate/${candidateId}/form/${item.doc_type_id}`}
             className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl transition shadow-xs ${
@@ -458,26 +486,42 @@ function DocumentRow({ candidateId, item, index, isUploading, onUpload }: Docume
                 : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20"
             }`}
           >
-            <PenTool className="w-3.5 h-3.5" />
-            <span>{isUploaded ? "מלא מחדש דיגיטלית" : "מלא טופס דיגיטלי"}</span>
+            {item.doc_type_id === "doc_10" || item.doc_type_id === "doc_11" ? (
+              <Camera className="w-3.5 h-3.5" />
+            ) : (
+              <PenTool className="w-3.5 h-3.5" />
+            )}
+            <span>
+              {item.doc_type_id === "doc_11"
+                ? (isUploaded ? "החלף תמונת פספורט" : "צלם / העלה תמונת פספורט")
+                : item.doc_type_id === "doc_10"
+                ? (isUploaded ? "החלף צילום ת.ז." : "צלם / העלה תעודת זהות")
+                : (isUploaded ? "מלא מחדש דיגיטלית" : "מלא טופס דיגיטלי")}
+            </span>
           </Link>
 
-          {/* Hidden File Input for Scanned Upload */}
+          {/* Hidden File Input */}
           <input
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
-            accept=".pdf,application/pdf"
+            accept={
+              item.doc_type_id === "doc_11"
+                ? "image/*"
+                : item.doc_type_id === "doc_10"
+                ? "image/*,.pdf,application/pdf"
+                : ".pdf,application/pdf"
+            }
             className="hidden"
           />
 
-          {/* Scanned PDF Upload Button */}
+          {/* Quick File Upload Button */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition disabled:opacity-50"
-            title="העלאת קובץ סרוק חיצוני"
+            title="העלאת קובץ מהמכשיר"
           >
             {isUploading ? (
               <>
@@ -487,7 +531,13 @@ function DocumentRow({ candidateId, item, index, isUploading, onUpload }: Docume
             ) : (
               <>
                 <Upload className="w-3.5 h-3.5" />
-                <span>{isUploaded ? "החלף קובץ סרוק" : "העלה קובץ סרוק"}</span>
+                <span>
+                  {item.doc_type_id === "doc_11"
+                    ? (isUploaded ? "החלף תמונה" : "העלה תמונה")
+                    : item.doc_type_id === "doc_10"
+                    ? (isUploaded ? "החלף קובץ" : "העלה קובץ")
+                    : (isUploaded ? "החלף קובץ סרוק" : "העלה קובץ סרוק")}
+                </span>
               </>
             )}
           </button>

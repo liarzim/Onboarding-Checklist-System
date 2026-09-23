@@ -170,7 +170,7 @@ export async function POST(request: Request) {
       action_type: "CANDIDATE_DIGITAL_SIGNATURE",
       entity_type: "Candidate",
       entity_id: candidate.candidate_id,
-      details: `המועמד/ת ${data.full_name} (${paddedId}) חתם/ה דיגיטלית על כל 9 הטפסים בפורטל המועמדים`,
+      details: `המועמד/ת ${data.full_name} (${paddedId}) השלים/ה את כל 11 שלבי הקליטה, הטפסים ותמונות הזיהוי בפורטל המועמדים`,
     };
     await sheetsRepository.appendAuditLog(auditEntry);
 
