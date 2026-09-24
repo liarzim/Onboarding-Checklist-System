@@ -280,8 +280,14 @@ export default function CandidateChecklistPage() {
                 </span>
               </div>
               <div className="text-xs text-slate-500 mt-2 flex items-center gap-4 flex-wrap">
-                <span>אימייל: {candidate.email}</span>
-                <span>טלפון: {candidate.phone}</span>
+                <span dir="ltr" className="inline-flex items-center gap-1">
+                  <span>אימייל:</span>
+                  <span>{candidate.email}</span>
+                </span>
+                <span dir="ltr" className="inline-flex items-center gap-1">
+                  <span>טלפון:</span>
+                  <span>{candidate.phone}</span>
+                </span>
                 {candidate.drive_folder_id && !candidate.drive_folder_id.startsWith("test_drive_folder_") ? (
                   <a
                     href={`https://drive.google.com/drive/folders/${candidate.drive_folder_id}`}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth";
 import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
+import { createCandidateFolder } from "@/lib/drive";
 
 export const dynamic = "force-dynamic";
 
@@ -15,13 +16,26 @@ export async function GET(
     }
 
     const candidateId = params.id;
-    const candidate = await sheetsRepository.getCandidateById(candidateId);
+    let candidate = await sheetsRepository.getCandidateById(candidateId);
 
     if (!candidate) {
       return NextResponse.json(
         { error: "Not Found", message: `מועמד עם מזהה "${candidateId}" לא נמצא` },
         { status: 404 }
       );
+    }
+
+    // Auto-heal Drive folder: if created as local mock or missing, attempt to create real Drive folder
+    if (!candidate.drive_folder_id || candidate.drive_folder_id.startsWith("test_drive_folder_")) {
+      try {
+        const newFolderId = await createCandidateFolder(candidate.full_name, candidate.candidate_id);
+        if (newFolderId && !newFolderId.startsWith("test_drive_folder_")) {
+          candidate = { ...candidate, drive_folder_id: newFolderId };
+          await sheetsRepository.updateCandidateDriveFolder(candidate.candidate_id, newFolderId);
+        }
+      } catch {
+        // Keep existing fallback
+      }
     }
 
     const [vendor, stages, docTypes, checklist] = await Promise.all([

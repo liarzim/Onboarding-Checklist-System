@@ -408,6 +408,54 @@ export class SheetsRepository {
   }
 
   /**
+   * Updates candidate's Drive folder ID in Candidates sheet and local testStore.
+   */
+  async updateCandidateDriveFolder(candidate_id: string, drive_folder_id: string): Promise<void> {
+    const now = new Date().toISOString();
+
+    // 1. Update in local testStore
+    const testStore = loadTestStore();
+    const cIdx = testStore.candidates.findIndex((c) => c.candidate_id === candidate_id);
+    if (cIdx >= 0) {
+      testStore.candidates[cIdx] = {
+        ...testStore.candidates[cIdx],
+        drive_folder_id,
+        updated_at: now,
+      };
+      saveTestStore(testStore);
+    }
+
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
+      if (!spreadsheetId) return;
+
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CANDIDATES}!A2:H`,
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex((row) => String(row[0] || "") === candidate_id);
+
+      if (rowIndex >= 0) {
+        const sheetRowNumber = rowIndex + 2;
+        // Column H is drive_folder_id
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.CANDIDATES}!H${sheetRowNumber}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: [[drive_folder_id]],
+          },
+        });
+      }
+    } catch (err) {
+      console.warn("Sheets updateCandidateDriveFolder fallback:", err);
+    }
+  }
+
+  /**
    * Sets is_completed to true and updates stage to stage_completed.
    */
   async completeCandidate(candidate_id: string): Promise<void> {

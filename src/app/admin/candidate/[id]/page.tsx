@@ -266,13 +266,13 @@ export default function AdminCandidateReviewPage() {
                   <Building className="w-3.5 h-3.5 text-slate-400" />
                   ספק: <strong>{vendor?.company_name || candidate.vendor_id}</strong>
                 </span>
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1" dir="ltr">
                   <Mail className="w-3.5 h-3.5 text-slate-400" />
-                  {candidate.email}
+                  <span>{candidate.email}</span>
                 </span>
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1" dir="ltr">
                   <Phone className="w-3.5 h-3.5 text-slate-400" />
-                  {candidate.phone}
+                  <span>{candidate.phone}</span>
                 </span>
                 {candidate.drive_folder_id && !candidate.drive_folder_id.startsWith("test_drive_folder_") ? (
                   <a
