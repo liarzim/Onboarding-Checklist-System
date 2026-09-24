@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadTestStore, saveTestStore, setDemoCandidateCookie } from "@/lib/testStore";
+import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
 import type { Candidate } from "@/types/schema";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,8 @@ export async function POST(request: Request) {
       } else {
         testStore.candidates.unshift(cand);
       }
+      // Also write to Google Sheets if connected
+      sheetsRepository.appendCandidateToSheet(cand).catch(() => {});
     }
     saveTestStore(testStore);
 

@@ -67,9 +67,64 @@ export class SheetsRepository {
 
   /**
    * Fetches candidate list with optional filtering by vendor_id and is_completed status.
+  /**
+   * Appends candidate to Google Sheets Candidates tab.
+   * Returns true if successfully written to Google Sheets, false otherwise.
+   */
+  async appendCandidateToSheet(candidate: Candidate): Promise<boolean> {
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
+      if (!spreadsheetId) return false;
+
+      const accessToken =
+        candidate.access_token ||
+        `token_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const tokenExpiresAt =
+        candidate.token_expires_at ||
+        new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+
+      const row = [
+        sanitizeSheetCellValue(candidate.candidate_id),
+        sanitizeSheetCellValue(candidate.full_name),
+        sanitizeSheetCellValue(candidate.id_number),
+        sanitizeSheetCellValue(candidate.email),
+        sanitizeSheetCellValue(candidate.phone),
+        sanitizeSheetCellValue(candidate.vendor_id),
+        sanitizeSheetCellValue(candidate.project_id),
+        sanitizeSheetCellValue(candidate.drive_folder_id),
+        sanitizeSheetCellValue(candidate.current_stage_id || "stage_1"),
+        candidate.is_completed ? "TRUE" : "FALSE",
+        candidate.created_at || new Date().toISOString(),
+        candidate.updated_at || new Date().toISOString(),
+        accessToken,
+        tokenExpiresAt,
+        candidate.is_signed_by_candidate ? "TRUE" : "FALSE",
+        candidate.signature_url || "",
+      ];
+
+      await sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CANDIDATES}!A:P`,
+        valueInputOption: "USER_ENTERED",
+        insertDataOption: "INSERT_ROWS",
+        requestBody: {
+          values: [row],
+        },
+      });
+      return true;
+    } catch (err) {
+      console.warn("Could not append candidate to Google Sheet:", err);
+      return false;
+    }
+  }
+
+  /**
+   * Fetches candidate list with optional filtering by vendor_id and is_completed status.
    */
   async getCandidates(filter?: ICandidatesFilter): Promise<Candidate[]> {
     let sheetCandidates: Candidate[] = [];
+    let isSheetsConnected = false;
     try {
       const sheets = getSheetsClient();
       const spreadsheetId = this.getSpreadsheetId();
@@ -101,6 +156,8 @@ export class SheetsRepository {
           signature_url: row[15] ? String(row[15]) : null,
         }))
         .filter((c) => c.candidate_id && c.candidate_id.trim().length > 0);
+
+      isSheetsConnected = true;
     } catch {
       // Ignore Google Sheets fetch error and merge with testStore
     }
@@ -113,6 +170,10 @@ export class SheetsRepository {
     for (const testCand of testStore.candidates) {
       if (!sheetIds.has(testCand.candidate_id)) {
         allCandidates.unshift(testCand);
+        // Auto-sync: if Google Sheets is connected, write this local candidate to Google Sheets so all devices see it!
+        if (isSheetsConnected) {
+          this.appendCandidateToSheet(testCand).catch(() => {});
+        }
       }
     }
 
@@ -286,40 +347,7 @@ export class SheetsRepository {
     }
     saveTestStore(testStore);
 
-    const row = [
-      sanitizeSheetCellValue(candidate.candidate_id),
-      sanitizeSheetCellValue(candidate.full_name),
-      sanitizeSheetCellValue(candidate.id_number),
-      sanitizeSheetCellValue(candidate.email),
-      sanitizeSheetCellValue(candidate.phone),
-      sanitizeSheetCellValue(candidate.vendor_id),
-      sanitizeSheetCellValue(candidate.project_id),
-      sanitizeSheetCellValue(candidate.drive_folder_id),
-      sanitizeSheetCellValue(candidate.current_stage_id),
-      candidate.is_completed ? "TRUE" : "FALSE",
-      candidate.created_at,
-      candidate.updated_at,
-      accessToken,
-      tokenExpiresAt,
-      candidate.is_signed_by_candidate ? "TRUE" : "FALSE",
-      candidate.signature_url || "",
-    ];
-
-    try {
-      const sheets = getSheetsClient();
-      const spreadsheetId = this.getSpreadsheetId();
-      await sheets.spreadsheets.values.append({
-        spreadsheetId,
-        range: `${SHEET_NAMES.CANDIDATES}!A:P`,
-        valueInputOption: "USER_ENTERED",
-        insertDataOption: "INSERT_ROWS",
-        requestBody: {
-          values: [row],
-        },
-      });
-    } catch (err) {
-      console.warn("Sheets createCandidate offline fallback:", err);
-    }
+    await this.appendCandidateToSheet(candidateWithToken);
   }
 
   /**
