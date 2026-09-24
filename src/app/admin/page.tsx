@@ -25,6 +25,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { validateIsraeliId } from "@/lib/israeliId";
+import TestingSandboxBar from "@/components/admin/TestingSandboxBar";
 
 interface CandidateRecord {
   candidate_id: string;
@@ -294,7 +295,14 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Testing Sandbox & Persona Switcher */}
+      <TestingSandboxBar
+        vendors={vendors}
+        candidates={candidates}
+        onDataReset={loadData}
+      />
+
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
