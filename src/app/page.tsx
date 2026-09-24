@@ -335,8 +335,9 @@ function UnifiedIdentificationContent() {
                 <input
                   type="email"
                   disabled
+                  dir="ltr"
                   value={email}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-700 bg-slate-900/60 text-slate-400 text-xs font-mono"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-700 bg-slate-900/60 text-slate-400 text-xs font-mono text-left"
                 />
               </div>
 
@@ -476,10 +477,11 @@ function UnifiedIdentificationContent() {
                 <input
                   type="email"
                   required
+                  dir="ltr"
                   value={regEmail}
                   onChange={(e) => setRegEmail(e.target.value)}
                   placeholder="daniel@alpha-tech.co.il"
-                  className="w-full pr-10 pl-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-white placeholder-slate-500 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  className="w-full pr-10 pl-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-white placeholder-slate-500 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-left"
                 />
               </div>
             </div>
@@ -575,10 +577,11 @@ function UnifiedIdentificationContent() {
                   <input
                     type="email"
                     required
+                    dir="ltr"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="user@example.com"
-                    className="w-full pr-10 pl-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-white placeholder-slate-500 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    className="w-full pr-10 pl-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-white placeholder-slate-500 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-left"
                   />
                 </div>
               </div>

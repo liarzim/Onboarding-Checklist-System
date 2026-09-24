@@ -452,12 +452,13 @@ export default function VendorDashboardPage() {
                     <input
                       type="email"
                       required
+                      dir="ltr"
                       value={formData.email}
                       onChange={(e) =>
                         setFormData({ ...formData, email: e.target.value })
                       }
                       placeholder="candidate@email.com"
-                      className="w-full pr-9 pl-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pr-9 pl-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-left"
                     />
                   </div>
                 </div>
@@ -471,12 +472,13 @@ export default function VendorDashboardPage() {
                     <input
                       type="tel"
                       required
+                      dir="ltr"
                       value={formData.phone}
                       onChange={(e) =>
                         setFormData({ ...formData, phone: e.target.value })
                       }
                       placeholder="050-1234567"
-                      className="w-full pr-9 pl-3 py-2 rounded-xl border border-slate-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pr-9 pl-3 py-2 rounded-xl border border-slate-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 text-left"
                     />
                   </div>
                 </div>

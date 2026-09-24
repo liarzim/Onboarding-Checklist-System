@@ -1429,11 +1429,12 @@ export default function AdminSettingsPage() {
                         <input
                           type="email"
                           required
+                          dir="ltr"
                           value={vendorForm.contact_email}
                           onChange={(e) =>
                             setVendorForm({ ...vendorForm, contact_email: e.target.value })
                           }
-                          className="w-full text-xs bg-white border border-slate-300 rounded px-2.5 py-1.5 font-mono"
+                          className="w-full text-xs bg-white border border-slate-300 rounded px-2.5 py-1.5 font-mono text-left"
                         />
                       </div>
                     </div>
@@ -1617,10 +1618,11 @@ export default function AdminSettingsPage() {
                       <input
                         type="email"
                         required
+                        dir="ltr"
                         value={newAdminEmail}
                         onChange={(e) => setNewAdminEmail(e.target.value)}
                         placeholder="user@gmail.com"
-                        className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-500"
+                        className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-500 font-mono text-left"
                       />
                     </div>
                     <div>

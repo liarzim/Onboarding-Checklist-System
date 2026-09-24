@@ -811,10 +811,11 @@ export default function AdminDashboardPage() {
                         <input
                           type="email"
                           required
+                          dir="ltr"
                           value={formData.email}
                           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                           placeholder="candidate@example.com"
-                          className="w-full pr-10 pl-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                          className="w-full pr-10 pl-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-left"
                         />
                       </div>
                     </div>
@@ -828,10 +829,11 @@ export default function AdminDashboardPage() {
                         <input
                           type="tel"
                           required
+                          dir="ltr"
                           value={formData.phone}
                           onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                           placeholder="050-1234567"
-                          className="w-full pr-10 pl-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                          className="w-full pr-10 pl-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-left"
                         />
                       </div>
                     </div>
