@@ -11,15 +11,15 @@ export async function createCandidateFolder(
   candidateName: string,
   candidateId: string
 ): Promise<string> {
-  const drive = getDriveClient();
-  const env = getEnv();
-
   // Sanitize candidateName and candidateId to prevent injection in naming
   const safeName = candidateName.replace(/[/\\:*?"<>|]/g, "").trim();
   const safeId = candidateId.replace(/[/\\:*?"<>|]/g, "").trim();
   const folderName = `${safeId} - ${safeName}`;
 
   try {
+    const drive = getDriveClient();
+    const env = getEnv();
+
     const response = await drive.files.create({
       requestBody: {
         name: folderName,
@@ -53,9 +53,8 @@ export async function uploadFileToCandidateFolder(
   fileBuffer: Buffer,
   mimeType: string = "application/pdf"
 ): Promise<{ fileId: string; webViewLink: string }> {
-  const drive = getDriveClient();
-
   try {
+    const drive = getDriveClient();
     // 1. Check for existing file with the identical name in the folder
     // Robustly sanitize search parameters against Drive search query injection
     const sanitizedFolderId = folderId.replace(/['\\]/g, "");

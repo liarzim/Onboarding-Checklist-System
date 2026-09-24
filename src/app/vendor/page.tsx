@@ -15,7 +15,10 @@ import {
   Phone,
   Mail,
   FolderOpen,
+  CheckCircle2,
+  CreditCard,
 } from "lucide-react";
+import { validateIsraeliId } from "@/lib/israeliId";
 
 interface CandidateItem {
   candidate_id: string;
@@ -44,6 +47,11 @@ export default function VendorDashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Israeli ID On-the-fly validation state
+  const [idValidationError, setIdValidationError] = useState<string | null>(null);
+  const [idTouched, setIdTouched] = useState(false);
+
   const [formData, setFormData] = useState({
     full_name: "",
     id_number: "",
@@ -51,6 +59,40 @@ export default function VendorDashboardPage() {
     email: "",
     phone: "",
   });
+
+  function validateIdField(val: string): boolean {
+    const trimmed = val.trim();
+    if (!trimmed) {
+      setIdValidationError("נא להזין מספר תעודת זהות");
+      return false;
+    }
+    if (!/^\d+$/.test(trimmed)) {
+      setIdValidationError("מספר תעודת זהות חייב להכיל ספרות בלבד");
+      return false;
+    }
+    if (trimmed.length > 9) {
+      setIdValidationError("מספר תעודת זהות מכיל עד 9 ספרות");
+      return false;
+    }
+    if (!validateIsraeliId(trimmed)) {
+      setIdValidationError("מספר תעודת זהות לא תקין (ספרת ביקורת שגויה)");
+      return false;
+    }
+    setIdValidationError(null);
+    return true;
+  }
+
+  function handleIdChange(value: string) {
+    setFormData((prev) => ({ ...prev, id_number: value }));
+    if (idTouched) {
+      validateIdField(value);
+    }
+  }
+
+  function handleIdBlur() {
+    setIdTouched(true);
+    validateIdField(formData.id_number);
+  }
 
   async function loadCandidates() {
     try {
@@ -76,6 +118,14 @@ export default function VendorDashboardPage() {
   async function handleCreateCandidate(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
+
+    // Validate ID on the fly before submitting
+    if (!validateIdField(formData.id_number)) {
+      setIdTouched(true);
+      setFormError("מספר תעודת זהות אינו תקין לפי ספרת ביקורת ישראלית");
+      return;
+    }
+
     setCreating(true);
 
     try {
@@ -133,7 +183,12 @@ export default function VendorDashboardPage() {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setIdValidationError(null);
+            setIdTouched(false);
+            setFormError(null);
+            setIsModalOpen(true);
+          }}
           className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
         >
           <UserPlus className="w-4 h-4" />
@@ -330,19 +385,41 @@ export default function VendorDashboardPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    מספר תעודת זהות *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.id_number}
-                    onChange={(e) =>
-                      setFormData({ ...formData, id_number: e.target.value })
-                    }
-                    placeholder="9 ספרות"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      מספר תעודת זהות *
+                    </label>
+                    {idTouched && !idValidationError && formData.id_number && (
+                      <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>ת.ז. תקינה ומאומתת</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <CreditCard className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      required
+                      value={formData.id_number}
+                      onChange={(e) => handleIdChange(e.target.value)}
+                      onBlur={handleIdBlur}
+                      placeholder="9 ספרות (למשל: 038602207)"
+                      className={`w-full pr-9 pl-3 py-2 rounded-xl border text-sm font-mono focus:outline-none focus:ring-2 transition ${
+                        idValidationError
+                          ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20 text-rose-900"
+                          : idTouched && formData.id_number
+                          ? "border-emerald-400 focus:ring-emerald-500 bg-emerald-50/20 text-slate-900"
+                          : "border-slate-200 focus:ring-blue-500"
+                      }`}
+                    />
+                  </div>
+                  {idValidationError && (
+                    <p className="text-[11px] text-rose-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>{idValidationError}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>

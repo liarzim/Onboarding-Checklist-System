@@ -755,29 +755,33 @@ export class SheetsRepository {
    * Appends an entry to the AuditLogs sheet.
    */
   async appendAuditLog(entry: AuditLogEntry): Promise<void> {
-    const sheets = getSheetsClient();
-    const spreadsheetId = this.getSpreadsheetId();
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
 
-    const row = [
-      sanitizeSheetCellValue(entry.log_id),
-      sanitizeSheetCellValue(entry.timestamp),
-      sanitizeSheetCellValue(entry.actor_email),
-      sanitizeSheetCellValue(entry.actor_role),
-      sanitizeSheetCellValue(entry.action_type),
-      sanitizeSheetCellValue(entry.entity_type),
-      sanitizeSheetCellValue(entry.entity_id),
-      sanitizeSheetCellValue(entry.details),
-    ];
+      const row = [
+        sanitizeSheetCellValue(entry.log_id),
+        sanitizeSheetCellValue(entry.timestamp),
+        sanitizeSheetCellValue(entry.actor_email),
+        sanitizeSheetCellValue(entry.actor_role),
+        sanitizeSheetCellValue(entry.action_type),
+        sanitizeSheetCellValue(entry.entity_type),
+        sanitizeSheetCellValue(entry.entity_id),
+        sanitizeSheetCellValue(entry.details),
+      ];
 
-    await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: `${SHEET_NAMES.AUDIT_LOGS}!A:H`,
-      valueInputOption: "USER_ENTERED",
-      insertDataOption: "INSERT_ROWS",
-      requestBody: {
-        values: [row],
-      },
-    });
+      await sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range: `${SHEET_NAMES.AUDIT_LOGS}!A:H`,
+        valueInputOption: "USER_ENTERED",
+        insertDataOption: "INSERT_ROWS",
+        requestBody: {
+          values: [row],
+        },
+      });
+    } catch (err) {
+      console.warn("Sheets appendAuditLog offline fallback:", err);
+    }
   }
 
   /**

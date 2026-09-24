@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getVendorSession } from "@/lib/auth";
 import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
 import { createCandidateFolder } from "@/lib/drive";
+import { validateIsraeliId } from "@/lib/israeliId";
 import type { Candidate, AuditLogEntry } from "@/types/schema";
 
 const CreateCandidateSchema = z.object({
@@ -12,9 +13,11 @@ const CreateCandidateSchema = z.object({
     .max(100, "שם מלא ארוך מדי"),
   id_number: z
     .string()
-    .min(5, "מספר תעודת זהות לא תקין")
+    .min(5, "מספר תעודת זהות חייב להכיל לפחות 5 ספרות")
     .max(20, "מספר תעודת זהות ארוך מדי")
-    .regex(/^[0-9A-Za-z-]+$/, "מספר תעודת זהות חייב להכיל ספרות ומקפים בלבד"),
+    .refine((val) => validateIsraeliId(val), {
+      message: "מספר תעודת זהות לא תקין (ספרת ביקורת שגויה)",
+    }),
   project_id: z
     .string()
     .min(1, "נא לציין שם או מזהה פרויקט")
