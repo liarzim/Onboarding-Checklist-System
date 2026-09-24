@@ -103,7 +103,30 @@ export default function VendorDashboardPage() {
         throw new Error("שגיאה בטעינת רשימת המועמדים");
       }
       const data = await res.json();
-      setCandidates(data.candidates || []);
+      let fetchedCandidates = data.candidates || [];
+
+      if (typeof window !== "undefined") {
+        if (fetchedCandidates.length > 0) {
+          localStorage.setItem("onboarding_demo_candidates", JSON.stringify(fetchedCandidates));
+        } else {
+          const local = localStorage.getItem("onboarding_demo_candidates");
+          if (local) {
+            try {
+              const parsed = JSON.parse(local);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                fetchedCandidates = parsed;
+                fetch("/api/demo/sync", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ candidates: parsed }),
+                }).catch(() => {});
+              }
+            } catch {}
+          }
+        }
+      }
+
+      setCandidates(fetchedCandidates);
     } catch (err) {
       setError(err instanceof Error ? err.message : "שגיאה בטעינה");
     } finally {
@@ -138,6 +161,20 @@ export default function VendorDashboardPage() {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message || "שגיאה ביצירת המועמד");
+      }
+
+      if (typeof window !== "undefined" && data.candidate) {
+        try {
+          const local = localStorage.getItem("onboarding_demo_candidates");
+          const existing = local ? JSON.parse(local) : [];
+          const updated = [
+            data.candidate,
+            ...(Array.isArray(existing)
+              ? existing.filter((c: any) => c.candidate_id !== data.candidate.candidate_id)
+              : []),
+          ];
+          localStorage.setItem("onboarding_demo_candidates", JSON.stringify(updated));
+        } catch {}
       }
 
       // Reset form and close modal

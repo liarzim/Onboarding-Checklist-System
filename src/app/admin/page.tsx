@@ -156,6 +156,20 @@ export default function AdminDashboardPage() {
         throw new Error(data.message || "שגיאה ביצירת המועמד");
       }
 
+      if (typeof window !== "undefined" && data.candidate) {
+        try {
+          const local = localStorage.getItem("onboarding_demo_candidates");
+          const existing = local ? JSON.parse(local) : [];
+          const updated = [
+            data.candidate,
+            ...(Array.isArray(existing)
+              ? existing.filter((c: any) => c.candidate_id !== data.candidate.candidate_id)
+              : []),
+          ];
+          localStorage.setItem("onboarding_demo_candidates", JSON.stringify(updated));
+        } catch {}
+      }
+
       setCreatedCandidateInfo(data.candidate);
       setFormData({
         full_name: "",
@@ -193,7 +207,29 @@ export default function AdminDashboardPage() {
       const candidatesData = await candidatesRes.json();
       const metaData = await metaRes.json();
 
-      setCandidates(candidatesData.candidates || []);
+      let fetchedCandidates = candidatesData.candidates || [];
+      if (typeof window !== "undefined") {
+        if (fetchedCandidates.length > 0) {
+          localStorage.setItem("onboarding_demo_candidates", JSON.stringify(fetchedCandidates));
+        } else {
+          const local = localStorage.getItem("onboarding_demo_candidates");
+          if (local) {
+            try {
+              const parsed = JSON.parse(local);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                fetchedCandidates = parsed;
+                fetch("/api/demo/sync", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ candidates: parsed }),
+                }).catch(() => {});
+              }
+            } catch {}
+          }
+        }
+      }
+
+      setCandidates(fetchedCandidates);
       setVendors(metaData.vendors || []);
       setStages(metaData.stages || []);
     } catch (err) {

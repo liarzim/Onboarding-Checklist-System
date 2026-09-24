@@ -385,6 +385,7 @@ export default function CandidatePortalClient({
             key={selectedDocId}
             docTypeId={selectedDocId}
             candidate={candidate}
+            token={token}
             isEmbeddedInPortal={true}
             nextDocTypeId={nextPendingDocId}
             onFormSubmitted={(submittedId) => handleFormSubmitted(submittedId)}

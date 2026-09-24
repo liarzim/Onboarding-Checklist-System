@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminSession } from "@/lib/auth";
 import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
+import { setDemoCandidateCookie } from "@/lib/testStore";
 import type { AuditLogEntry } from "@/types/schema";
 
 const UpdateStageSchema = z.object({
@@ -72,12 +73,19 @@ export async function PATCH(
     };
     await sheetsRepository.appendAuditLog(auditEntry);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: `שלב המועמד עודכן בהצלחה ל-"${targetStage.stage_name}"`,
       stage_id,
       stage_name: targetStage.stage_name,
     });
+
+    const updatedCandidate = await sheetsRepository.getCandidateById(candidateId);
+    if (updatedCandidate) {
+      setDemoCandidateCookie(response, updatedCandidate);
+    }
+
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "שגיאה בעדכון שלב המועמד";
     return NextResponse.json({ error: "Server Error", message }, { status: 500 });

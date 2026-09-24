@@ -98,7 +98,27 @@ export default function AdminCandidateReviewPage() {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(`/api/admin/candidate/${candidateId}`);
+      let res = await fetch(`/api/admin/candidate/${candidateId}`);
+      if (!res.ok && res.status === 404 && typeof window !== "undefined") {
+        const local = localStorage.getItem("onboarding_demo_candidates");
+        if (local) {
+          try {
+            const parsed = JSON.parse(local);
+            const found = Array.isArray(parsed)
+              ? parsed.find((c: any) => c.candidate_id === candidateId)
+              : null;
+            if (found) {
+              await fetch("/api/demo/sync", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ candidates: parsed }),
+              });
+              res = await fetch(`/api/admin/candidate/${candidateId}`);
+            }
+          } catch {}
+        }
+      }
+
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.message || "שגיאה בטעינת נתוני המועמד");

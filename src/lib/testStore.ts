@@ -38,41 +38,98 @@ export function getInitialTestStorage(): TestStorageData {
   };
 }
 
+export function getDemoCookieCandidates(): Candidate[] {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { cookies } = require("next/headers");
+    const cookieStore = cookies();
+    const val = cookieStore.get("demo_candidates")?.value;
+    if (val) {
+      const decoded = decodeURIComponent(val);
+      const parsed = JSON.parse(decoded);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    // Expected outside of Next.js server request context or during build
+  }
+  return [];
+}
+
+export function setDemoCandidateCookie(response: any, candidate: Candidate): void {
+  try {
+    const existingList = getDemoCookieCandidates();
+    const idx = existingList.findIndex((c) => c.candidate_id === candidate.candidate_id);
+    if (idx >= 0) {
+      existingList[idx] = { ...existingList[idx], ...candidate };
+    } else {
+      existingList.unshift(candidate);
+    }
+    const trimmed = existingList.slice(0, 25);
+    response.cookies.set("demo_candidates", encodeURIComponent(JSON.stringify(trimmed)), {
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60,
+      sameSite: "lax",
+    });
+  } catch (err) {
+    console.warn("Could not set demo_candidates cookie:", err);
+  }
+}
+
 export function loadTestStore(): TestStorageData {
-  if (global.__testStoreMemoryStorage) {
-    return global.__testStoreMemoryStorage;
-  }
+  let store = global.__testStoreMemoryStorage;
 
-  // 1. Try reading from primary storage (local project data/ folder)
-  try {
-    if (fs.existsSync(PRIMARY_STORAGE_PATH)) {
-      const content = fs.readFileSync(PRIMARY_STORAGE_PATH, "utf-8");
-      const parsed = JSON.parse(content);
-      if (parsed && Array.isArray(parsed.candidates)) {
-        global.__testStoreMemoryStorage = parsed;
-        return parsed;
+  if (!store) {
+    // 1. Try reading from primary storage (local project data/ folder)
+    try {
+      if (fs.existsSync(PRIMARY_STORAGE_PATH)) {
+        const content = fs.readFileSync(PRIMARY_STORAGE_PATH, "utf-8");
+        const parsed = JSON.parse(content);
+        if (parsed && Array.isArray(parsed.candidates)) {
+          store = parsed;
+        }
+      }
+    } catch {
+      // Primary path unreadable or non-existent
+    }
+
+    // 2. Try reading from fallback storage in os.tmpdir() (persists across serverless container invocations)
+    if (!store) {
+      try {
+        if (fs.existsSync(FALLBACK_STORAGE_PATH)) {
+          const content = fs.readFileSync(FALLBACK_STORAGE_PATH, "utf-8");
+          const parsed = JSON.parse(content);
+          if (parsed && Array.isArray(parsed.candidates)) {
+            store = parsed;
+          }
+        }
+      } catch {
+        // Fallback unreadable
       }
     }
-  } catch {
-    // Primary path unreadable or non-existent
+
+    if (!store) {
+      store = getInitialTestStorage();
+    }
+    global.__testStoreMemoryStorage = store;
   }
 
-  // 2. Try reading from fallback storage in os.tmpdir() (persists across serverless container invocations)
-  try {
-    if (fs.existsSync(FALLBACK_STORAGE_PATH)) {
-      const content = fs.readFileSync(FALLBACK_STORAGE_PATH, "utf-8");
-      const parsed = JSON.parse(content);
-      if (parsed && Array.isArray(parsed.candidates)) {
-        global.__testStoreMemoryStorage = parsed;
-        return parsed;
+  // 3. Always merge with any candidates passed in the browser demo_candidates cookie
+  const cookieCandidates = getDemoCookieCandidates();
+  if (cookieCandidates.length > 0) {
+    for (const cc of cookieCandidates) {
+      const idx = store.candidates.findIndex((c) => c.candidate_id === cc.candidate_id);
+      if (idx >= 0) {
+        store.candidates[idx] = {
+          ...store.candidates[idx],
+          ...cc,
+        };
+      } else {
+        store.candidates.unshift(cc);
       }
     }
-  } catch {
-    // Fallback unreadable
   }
 
-  global.__testStoreMemoryStorage = getInitialTestStorage();
-  return global.__testStoreMemoryStorage;
+  return store;
 }
 
 export function saveTestStore(data: TestStorageData): void {

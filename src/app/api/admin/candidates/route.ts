@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminSession } from "@/lib/auth";
 import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
+import { setDemoCandidateCookie } from "@/lib/testStore";
 import { createCandidateFolder } from "@/lib/drive";
 import { validateIsraeliId } from "@/lib/israeliId";
 import type { Candidate, AuditLogEntry } from "@/types/schema";
@@ -180,10 +181,14 @@ export async function POST(request: Request) {
     };
     await sheetsRepository.appendAuditLog(auditEntry);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       candidate: newCandidate,
     });
+
+    setDemoCandidateCookie(response, newCandidate);
+
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "שגיאה ביצירת המועמד";
     return NextResponse.json({ error: "Server Error", message }, { status: 500 });

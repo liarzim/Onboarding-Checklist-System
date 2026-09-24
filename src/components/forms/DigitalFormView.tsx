@@ -38,6 +38,7 @@ interface DigitalFormViewProps {
   isEmbeddedInPortal?: boolean;
   nextDocTypeId?: string | null;
   onNavigateNext?: () => void;
+  token?: string;
 }
 
 export default function DigitalFormView({
@@ -47,6 +48,7 @@ export default function DigitalFormView({
   isEmbeddedInPortal = false,
   nextDocTypeId = null,
   onNavigateNext,
+  token,
 }: DigitalFormViewProps) {
   const router = useRouter();
   const printRef = useRef<HTMLDivElement | null>(null);
@@ -57,6 +59,7 @@ export default function DigitalFormView({
       <MediaUploadCard
         docTypeId={docTypeId as "doc_10" | "doc_11"}
         candidate={candidate}
+        token={token}
         nextDocTypeId={nextDocTypeId}
         onUploaded={(submittedId) => onFormSubmitted?.(submittedId)}
         onNavigateNext={onNavigateNext}
@@ -158,6 +161,9 @@ export default function DigitalFormView({
       formData.append("file", pdfFile);
       formData.append("candidate_id", candidate.candidate_id);
       formData.append("doc_type_id", docTypeId);
+      if (token) {
+        formData.append("token", token);
+      }
 
       // 3. Post to the documents upload API
       const res = await fetch("/api/documents/upload", {

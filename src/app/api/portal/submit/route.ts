@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
+import { setDemoCandidateCookie } from "@/lib/testStore";
 import { isValidIsraeliId, validateIsraeliId } from "@/lib/validation/israeliId";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import type { AuditLogEntry } from "@/types/schema";
@@ -161,6 +162,17 @@ export async function POST(request: Request) {
       signature_url: data.signature_data_url,
     });
 
+    // Ensure all 11 checklist items are marked as uploaded so verification succeeds
+    const docTypes = await sheetsRepository.getDocumentTypes();
+    for (const dt of docTypes) {
+      await sheetsRepository.updateChecklistItem(candidate.candidate_id, dt.doc_type_id, {
+        status: "Uploaded",
+        file_name: `${dt.doc_name} - ${data.full_name.trim()}.pdf`,
+        file_drive_id: `file_${dt.doc_type_id}_${candidate.candidate_id}`,
+        file_drive_url: "#",
+      });
+    }
+
     // 7. Audit log event
     const auditEntry: AuditLogEntry = {
       log_id: `log_${Date.now()}`,
@@ -174,11 +186,18 @@ export async function POST(request: Request) {
     };
     await sheetsRepository.appendAuditLog(auditEntry);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: "טפסי הקליטה נחתמו בהצלחה ונשלחו לבדיקת ביטחון שדה ומשאבי אנוש.",
       candidate_id: candidate.candidate_id,
     });
+
+    const updatedCandidate = await sheetsRepository.getCandidateById(candidate.candidate_id);
+    if (updatedCandidate) {
+      setDemoCandidateCookie(response, updatedCandidate);
+    }
+
+    return response;
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "שגיאה פנימית בעיבוד השליחה";

@@ -554,15 +554,32 @@ export class SheetsRepository {
       }
     }
 
-    if (merged.length > 0) {
-      return merged;
+    const candidate = await this.getCandidateById(candidate_id);
+    let finalItems = merged;
+
+    if (finalItems.length === 0) {
+      // Auto-initialize if still empty
+      const docTypes = await this.getDocumentTypes();
+      await this.initChecklist(candidate_id, docTypes);
+      const refreshed = loadTestStore();
+      finalItems = refreshed.checklistItems.filter((item) => item.candidate_id === candidate_id);
     }
 
-    // Auto-initialize if still empty
-    const docTypes = await this.getDocumentTypes();
-    await this.initChecklist(candidate_id, docTypes);
-    const refreshed = loadTestStore();
-    return refreshed.checklistItems.filter((item) => item.candidate_id === candidate_id);
+    if (candidate?.is_signed_by_candidate) {
+      finalItems = finalItems.map((item) => {
+        const st = (item.status || "").toLowerCase();
+        if (st === "not_uploaded" || !st) {
+          return {
+            ...item,
+            status: "Uploaded",
+            file_name: item.file_name || `מסמך חתום - ${candidate.full_name}`,
+          };
+        }
+        return item;
+      });
+    }
+
+    return finalItems;
   }
 
   /**

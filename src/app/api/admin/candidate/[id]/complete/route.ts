@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth";
 import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
+import { setDemoCandidateCookie } from "@/lib/testStore";
 import type { AuditLogEntry } from "@/types/schema";
 
 export async function POST(
@@ -81,11 +82,18 @@ export async function POST(
     };
     await sheetsRepository.appendAuditLog(auditEntry);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: `תהליך הקליטה של ${candidate.full_name} הושלם בהצלחה והכרטיס החכם אושר להנפקה`,
       candidate_id: candidateId,
     });
+
+    const updatedCandidate = await sheetsRepository.getCandidateById(candidateId);
+    if (updatedCandidate) {
+      setDemoCandidateCookie(response, updatedCandidate);
+    }
+
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "שגיאה בסיום תהליך המועמד";
     return NextResponse.json({ error: "Server Error", message }, { status: 500 });
