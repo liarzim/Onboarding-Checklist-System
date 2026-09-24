@@ -269,15 +269,61 @@ export default function AdminSettingsPage() {
       const res = await fetch("/api/admin/settings/google-connection");
       const json = await res.json();
       if (res.ok && json.success) {
+        let sheetId = json.data.spreadsheetId || "";
+        let folderId = json.data.driveFolderId || "";
+
+        // If server returns empty or placeholder, check localStorage for previous connection
+        if (
+          (!sheetId || sheetId === "your_google_spreadsheet_id_here") &&
+          typeof window !== "undefined"
+        ) {
+          const local = localStorage.getItem("onboarding_google_config");
+          if (local) {
+            try {
+              const parsed = JSON.parse(local);
+              if (parsed.spreadsheetId || parsed.driveFolderId) {
+                sheetId = parsed.spreadsheetId || sheetId;
+                folderId = parsed.driveFolderId || folderId;
+                // Auto-sync back to server
+                await fetch("/api/admin/settings/google-connection", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    spreadsheetId: sheetId,
+                    driveFolderId: folderId,
+                  }),
+                });
+              }
+            } catch {}
+          }
+        } else if (
+          sheetId &&
+          sheetId !== "your_google_spreadsheet_id_here" &&
+          typeof window !== "undefined"
+        ) {
+          localStorage.setItem(
+            "onboarding_google_config",
+            JSON.stringify({ spreadsheetId: sheetId, driveFolderId: folderId })
+          );
+        }
+
         setGoogleAuthMode(json.data.authMode || "service_account");
         setGoogleServiceEmail(json.data.serviceAccountEmail || "");
         setGooglePrivateKeyConfigured(Boolean(json.data.isPrivateKeyConfigured));
         setIsOauthConnected(Boolean(json.data.isOauthConnected));
         setOauthEmail(json.data.oauthEmail || "");
-        setGoogleSpreadsheetId(json.data.spreadsheetId || "");
-        setGoogleDriveFolderId(json.data.driveFolderId || "");
-        setGoogleSpreadsheetUrl(json.data.spreadsheetUrl || "");
-        setGoogleDriveFolderUrl(json.data.driveFolderUrl || "");
+        setGoogleSpreadsheetId(sheetId);
+        setGoogleDriveFolderId(folderId);
+        setGoogleSpreadsheetUrl(
+          sheetId && sheetId !== "your_google_spreadsheet_id_here"
+            ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit`
+            : ""
+        );
+        setGoogleDriveFolderUrl(
+          folderId && folderId !== "your_google_drive_folder_id_here"
+            ? `https://drive.google.com/drive/folders/${folderId}`
+            : ""
+        );
       }
     } catch {
       // Ignore
@@ -365,15 +411,27 @@ export default function AdminSettingsPage() {
       const json = await res.json();
       if (res.ok && json.success) {
         setMessage({ type: "success", text: json.message });
-        setGoogleSpreadsheetId(json.data.spreadsheetId || "");
-        setGoogleDriveFolderId(json.data.driveFolderId || "");
-        setGoogleSpreadsheetUrl(json.data.spreadsheetUrl || "");
-        setGoogleDriveFolderUrl(json.data.driveFolderUrl || "");
+        const newSheetId = json.data?.spreadsheetId || "";
+        const newFolderId = json.data?.driveFolderId || "";
+        setGoogleSpreadsheetId(newSheetId);
+        setGoogleDriveFolderId(newFolderId);
+        setGoogleSpreadsheetUrl(json.data?.spreadsheetUrl || "");
+        setGoogleDriveFolderUrl(json.data?.driveFolderUrl || "");
+
+        if (typeof window !== "undefined" && newSheetId) {
+          localStorage.setItem(
+            "onboarding_google_config",
+            JSON.stringify({
+              spreadsheetId: newSheetId,
+              driveFolderId: newFolderId,
+            })
+          );
+        }
 
         // Immediately test the newly created resources
         await handleTestGoogleConnection(
-          json.data.spreadsheetId,
-          json.data.driveFolderId
+          newSheetId,
+          newFolderId
         );
         // Refresh all settings tabs so newly populated data appears immediately
         await fetchSettings();
@@ -432,15 +490,27 @@ export default function AdminSettingsPage() {
       const json = await res.json();
       if (res.ok && json.success) {
         setMessage({ type: "success", text: json.message });
-        setGoogleSpreadsheetId(json.data.spreadsheetId || "");
-        setGoogleDriveFolderId(json.data.driveFolderId || "");
-        setGoogleSpreadsheetUrl(json.data.spreadsheetUrl || "");
-        setGoogleDriveFolderUrl(json.data.driveFolderUrl || "");
+        const savedSheetId = json.data?.spreadsheetId || googleSpreadsheetId;
+        const savedFolderId = json.data?.driveFolderId || googleDriveFolderId;
+        setGoogleSpreadsheetId(savedSheetId);
+        setGoogleDriveFolderId(savedFolderId);
+        setGoogleSpreadsheetUrl(json.data?.spreadsheetUrl || "");
+        setGoogleDriveFolderUrl(json.data?.driveFolderUrl || "");
+
+        if (typeof window !== "undefined" && savedSheetId) {
+          localStorage.setItem(
+            "onboarding_google_config",
+            JSON.stringify({
+              spreadsheetId: savedSheetId,
+              driveFolderId: savedFolderId,
+            })
+          );
+        }
 
         // Automatically trigger live test after saving
         await handleTestGoogleConnection(
-          json.data.spreadsheetId,
-          json.data.driveFolderId
+          savedSheetId,
+          savedFolderId
         );
         // Refresh settings so other tabs update immediately with any sheet data
         await fetchSettings();

@@ -6,6 +6,7 @@ import {
   extractDriveFolderId,
   saveDynamicGoogleConfig,
   getDynamicGoogleConfig,
+  setCookieGoogleConfig,
   parseServiceAccountJson,
 } from "@/lib/dynamicConfig";
 import { assertAdminRole } from "@/lib/security";
@@ -47,7 +48,7 @@ export async function GET() {
       ? `https://drive.google.com/drive/folders/${driveFolderId}`
       : "";
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         authMode,
@@ -61,6 +62,16 @@ export async function GET() {
         driveFolderUrl,
       },
     });
+
+    if (spreadsheetId || driveFolderId) {
+      setCookieGoogleConfig(response, {
+        ...dynamicConfig,
+        spreadsheet_id: spreadsheetId,
+        drive_folder_id: driveFolderId,
+      });
+    }
+
+    return response;
   } catch (error: any) {
     if (error?.status === 403 || error?.message?.includes("Forbidden")) {
       return NextResponse.json(
@@ -132,7 +143,7 @@ export async function POST(request: Request) {
     const env = getEnv();
     const dynamicConfig = getDynamicGoogleConfig();
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: "הגדרות החיבור ל-Google עודכנו בהצלחה",
       data: {
@@ -157,6 +168,14 @@ export async function POST(request: Request) {
           : "",
       },
     });
+
+    setCookieGoogleConfig(response, {
+      ...dynamicConfig,
+      spreadsheet_id: env.GOOGLE_SPREADSHEET_ID,
+      drive_folder_id: env.GOOGLE_DRIVE_ROOT_FOLDER_ID,
+    });
+
+    return response;
   } catch (error: any) {
     if (error?.status === 403 || error?.message?.includes("Forbidden")) {
       return NextResponse.json(

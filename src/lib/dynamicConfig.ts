@@ -100,7 +100,52 @@ export function extractDriveFolderId(input: string): string {
 }
 
 /**
- * Reads dynamic configuration stored on disk or in serverless memory cache.
+ * Reads dynamic configuration stored in long-lived domain cookie if available.
+ */
+export function getCookieGoogleConfig(): Partial<DynamicGoogleConfig> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { cookies } = require("next/headers");
+    const cookieStore = cookies();
+    const val = cookieStore.get("google_dynamic_config")?.value;
+    if (val) {
+      const decoded = decodeURIComponent(val);
+      const parsed = JSON.parse(decoded);
+      if (parsed && typeof parsed === "object") return parsed;
+    }
+  } catch {
+    // Expected outside of Next.js server request context or during build
+  }
+  return {};
+}
+
+/**
+ * Sets long-lived cookie for dynamic Google config on an HTTP response.
+ */
+export function setCookieGoogleConfig(response: any, config: DynamicGoogleConfig): void {
+  try {
+    const toSave: DynamicGoogleConfig = {
+      auth_mode: config.auth_mode,
+      service_account_email: config.service_account_email,
+      service_account_private_key: config.service_account_private_key,
+      oauth_refresh_token: config.oauth_refresh_token,
+      oauth_email: config.oauth_email,
+      spreadsheet_id: config.spreadsheet_id,
+      drive_folder_id: config.drive_folder_id,
+      updated_at: config.updated_at || new Date().toISOString(),
+    };
+    response.cookies.set("google_dynamic_config", encodeURIComponent(JSON.stringify(toSave)), {
+      path: "/",
+      maxAge: 365 * 24 * 60 * 60, // 1 year
+      sameSite: "lax",
+    });
+  } catch (err) {
+    console.warn("Could not set google_dynamic_config cookie:", err);
+  }
+}
+
+/**
+ * Reads dynamic configuration stored on disk, in cookies, or in serverless memory cache.
  */
 export function getDynamicGoogleConfig(): DynamicGoogleConfig {
   let fileConfig: DynamicGoogleConfig = {};
@@ -127,10 +172,14 @@ export function getDynamicGoogleConfig(): DynamicGoogleConfig {
     }
   }
 
-  // 3. Merge with in-memory global cache
+  // 3. Read from incoming request cookie if available
+  const cookieConfig = getCookieGoogleConfig();
+
+  // 4. Merge with in-memory global cache
   const memoryConfig = global.__dynamicGoogleConfigCache || {};
   return {
     ...fileConfig,
+    ...cookieConfig,
     ...memoryConfig,
   };
 }

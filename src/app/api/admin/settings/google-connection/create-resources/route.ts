@@ -4,6 +4,7 @@ import { getEnv, resetEnvCache } from "@/lib/env";
 import {
   saveDynamicGoogleConfig,
   getDynamicGoogleConfig,
+  setCookieGoogleConfig,
   extractDriveFolderId,
 } from "@/lib/dynamicConfig";
 import { assertAdminRole } from "@/lib/security";
@@ -362,7 +363,7 @@ export async function POST(request: Request) {
     const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
     const driveFolderUrl = `https://drive.google.com/drive/folders/${driveFolderId}`;
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: "הגיליון והתיקייה נוצרו בהצלחה בחשבון Google והוגדרו במערכת!",
       data: {
@@ -373,6 +374,15 @@ export async function POST(request: Request) {
         sharedWith: shareEmail || null,
       },
     });
+
+    const refreshedConfig = getDynamicGoogleConfig();
+    setCookieGoogleConfig(response, {
+      ...refreshedConfig,
+      spreadsheet_id: spreadsheetId,
+      drive_folder_id: driveFolderId,
+    });
+
+    return response;
   } catch (error: any) {
     if (error?.status === 403 || error?.message?.includes("Forbidden")) {
       return NextResponse.json(
