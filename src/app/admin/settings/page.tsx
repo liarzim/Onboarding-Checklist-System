@@ -566,7 +566,8 @@ export default function AdminSettingsPage() {
 
   function handleCopyEmail() {
     if (!googleServiceEmail) return;
-    navigator.clipboard.writeText(googleServiceEmail);
+    const cleanEmail = googleServiceEmail.replace(/['"]/g, "").trim();
+    navigator.clipboard.writeText(cleanEmail);
     setCopiedEmail(true);
     setTimeout(() => setCopiedEmail(false), 2500);
   }
@@ -2077,7 +2078,7 @@ export default function AdminSettingsPage() {
                               <input
                                 type="text"
                                 readOnly
-                                value={googleServiceEmail || ""}
+                                value={googleServiceEmail ? googleServiceEmail.replace(/['"]/g, "").trim() : ""}
                                 dir="ltr"
                                 className="w-full text-[11px] font-mono bg-white border border-slate-200 rounded px-2.5 py-1.5 text-slate-700 select-all"
                               />

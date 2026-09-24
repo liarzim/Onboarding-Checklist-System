@@ -5,7 +5,17 @@ export const envSchema = z.object({
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z
     .string()
     .optional()
-    .default("service-account@project.iam.gserviceaccount.com"),
+    .default("service-account@project.iam.gserviceaccount.com")
+    .transform((val) => {
+      let cleaned = (val || "").trim();
+      if (
+        (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+        (cleaned.startsWith("'") && cleaned.endsWith("'"))
+      ) {
+        cleaned = cleaned.slice(1, -1).trim();
+      }
+      return cleaned.replace(/['"]/g, "");
+    }),
   GOOGLE_PRIVATE_KEY: z
     .string()
     .optional()
@@ -23,11 +33,31 @@ export const envSchema = z.object({
   GOOGLE_SPREADSHEET_ID: z
     .string()
     .optional()
-    .default(""),
+    .default("")
+    .transform((val) => {
+      let cleaned = (val || "").trim();
+      if (
+        (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+        (cleaned.startsWith("'") && cleaned.endsWith("'"))
+      ) {
+        cleaned = cleaned.slice(1, -1).trim();
+      }
+      return cleaned.replace(/['"]/g, "");
+    }),
   GOOGLE_DRIVE_ROOT_FOLDER_ID: z
     .string()
     .optional()
-    .default(""),
+    .default("")
+    .transform((val) => {
+      let cleaned = (val || "").trim();
+      if (
+        (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+        (cleaned.startsWith("'") && cleaned.endsWith("'"))
+      ) {
+        cleaned = cleaned.slice(1, -1).trim();
+      }
+      return cleaned.replace(/['"]/g, "");
+    }),
   JWT_SECRET: z
     .string()
     .optional()

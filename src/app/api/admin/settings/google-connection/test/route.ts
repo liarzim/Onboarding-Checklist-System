@@ -92,7 +92,9 @@ export async function POST(request: Request) {
         result.sheetsOk = false;
         const msg = sheetError?.message || "";
         if (msg.includes("404") || msg.includes("not found")) {
-          result.sheetsDetails = "הגיליון לא נמצא. בדוק את מזהה הגיליון (Spreadsheet ID).";
+          result.sheetsDetails = isOauth
+            ? "הגיליון לא נמצא (404). ודא שמזהה הגיליון (Spreadsheet ID) נכון ושהוא נגיש לחשבונך."
+            : `הגיליון לא נמצא (404). ודא שהמזהה תקין ושהגיליון שותף עם חשבון השירות (${serviceAccountEmail}) בהרשאת עורך (Editor).`;
         } else if (
           msg.includes("403") ||
           msg.includes("permission") ||
@@ -135,7 +137,9 @@ export async function POST(request: Request) {
         result.driveOk = false;
         const msg = driveError?.message || "";
         if (msg.includes("404") || msg.includes("not found")) {
-          result.driveDetails = "התיקייה לא נמצאה בדרייב. בדוק את מזהה התיקייה (Folder ID).";
+          result.driveDetails = isOauth
+            ? "התיקייה לא נמצאה בדרייב (404). ודא שמזהה התיקייה (Folder ID) נכון ושהיא נגישה לחשבונך."
+            : `התיקייה לא נמצאה בדרייב (404). ודא שהמזהה תקין ושהתיקייה שותפה עם חשבון השירות (${serviceAccountEmail}) בהרשאת עורך (Editor).`;
         } else if (
           msg.includes("403") ||
           msg.includes("permission") ||

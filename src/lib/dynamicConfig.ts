@@ -41,8 +41,15 @@ export function parseServiceAccountJson(jsonString: string): {
     throw new Error("קובץ ה-JSON אינו תקין מבחינה תחבירית");
   }
 
-  const clientEmail = String(parsed.client_email || "").trim();
+  const clientEmail = String(parsed.client_email || "").trim().replace(/['"]/g, "");
   let privateKey = String(parsed.private_key || "").trim();
+  if (
+    (privateKey.startsWith('"') && privateKey.endsWith('"')) ||
+    (privateKey.startsWith("'") && privateKey.endsWith("'"))
+  ) {
+    privateKey = privateKey.slice(1, -1);
+  }
+  privateKey = privateKey.replace(/\\n/g, "\n");
 
   if (!clientEmail || !clientEmail.includes("@")) {
     throw new Error("לא נמצא שדה client_email תקין ב-JSON");
@@ -189,9 +196,23 @@ export function getDynamicGoogleConfig(): DynamicGoogleConfig {
  */
 export function saveDynamicGoogleConfig(config: DynamicGoogleConfig): void {
   const current = getDynamicGoogleConfig();
+  const sanitizedConfig: DynamicGoogleConfig = { ...config };
+
+  if (sanitizedConfig.service_account_email) {
+    sanitizedConfig.service_account_email = sanitizedConfig.service_account_email
+      .replace(/['"]/g, "")
+      .trim();
+  }
+  if (sanitizedConfig.spreadsheet_id) {
+    sanitizedConfig.spreadsheet_id = extractSpreadsheetId(sanitizedConfig.spreadsheet_id);
+  }
+  if (sanitizedConfig.drive_folder_id) {
+    sanitizedConfig.drive_folder_id = extractDriveFolderId(sanitizedConfig.drive_folder_id);
+  }
+
   const updated: DynamicGoogleConfig = {
     ...current,
-    ...config,
+    ...sanitizedConfig,
     updated_at: new Date().toISOString(),
   };
 
