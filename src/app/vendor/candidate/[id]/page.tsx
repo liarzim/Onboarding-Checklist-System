@@ -262,7 +262,7 @@ export default function CandidateChecklistPage() {
               <div className="text-xs text-slate-500 mt-2 flex items-center gap-4 flex-wrap">
                 <span>אימייל: {candidate.email}</span>
                 <span>טלפון: {candidate.phone}</span>
-                {candidate.drive_folder_id && (
+                {candidate.drive_folder_id && !candidate.drive_folder_id.startsWith("test_drive_folder_") ? (
                   <a
                     href={`https://drive.google.com/drive/folders/${candidate.drive_folder_id}`}
                     target="_blank"
@@ -273,6 +273,11 @@ export default function CandidateChecklistPage() {
                     <span>פתיחת תיקייה ב-Google Drive</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-lg text-[11px] font-medium" title="מצב הדגמה: סנכרון Google Drive אינו פעיל">
+                    <Folder className="w-3 h-3 text-amber-600" />
+                    <span>תיקיית מועמד מקומית (מצב הדגמה)</span>
+                  </span>
                 )}
               </div>
             </div>

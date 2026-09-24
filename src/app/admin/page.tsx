@@ -80,6 +80,7 @@ export default function AdminDashboardPage() {
     candidate_id: string;
     full_name: string;
     access_token?: string;
+    drive_folder_id?: string;
   } | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -595,9 +596,15 @@ export default function AdminDashboardPage() {
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       <span>המועמד נוצר בהצלחה ונפתח עבורו תיק קליטה!</span>
                     </div>
-                    <p>
-                      נוצרה תיקיית Google Drive ייעודית והופקו 11 פריטי הצ&apos;קליסט לקליטה.
-                    </p>
+                    {createdCandidateInfo.drive_folder_id && !createdCandidateInfo.drive_folder_id.startsWith("test_drive_folder_") ? (
+                      <p>
+                        נוצרה תיקיית Google Drive ייעודית והופקו 11 פריטי הצ&apos;קליסט לקליטה.
+                      </p>
+                    ) : (
+                      <p>
+                        נפתח תיק קליטה במערכת והופקו 11 פריטי הצ&apos;קליסט (מצב הדגמה מקומי).
+                      </p>
+                    )}
                   </div>
 
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs">
@@ -608,6 +615,24 @@ export default function AdminDashboardPage() {
                     <div className="flex justify-between py-1 border-b border-slate-200">
                       <span className="text-slate-500">מזהה מועמד:</span>
                       <span className="font-mono text-slate-700">{createdCandidateInfo.candidate_id}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-slate-200 items-center">
+                      <span className="text-slate-500">תיקיית דרייב:</span>
+                      {createdCandidateInfo.drive_folder_id && !createdCandidateInfo.drive_folder_id.startsWith("test_drive_folder_") ? (
+                        <a
+                          href={`https://drive.google.com/drive/folders/${createdCandidateInfo.drive_folder_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-blue-600 hover:underline flex items-center gap-1"
+                        >
+                          <span>פתח ב-Google Drive</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ) : (
+                        <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-[11px] font-medium">
+                          מצב הדגמה (ללא סנכרון Drive)
+                        </span>
+                      )}
                     </div>
                   </div>
 

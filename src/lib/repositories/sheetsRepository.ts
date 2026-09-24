@@ -69,6 +69,7 @@ export class SheetsRepository {
    * Fetches candidate list with optional filtering by vendor_id and is_completed status.
    */
   async getCandidates(filter?: ICandidatesFilter): Promise<Candidate[]> {
+    let sheetCandidates: Candidate[] = [];
     try {
       const sheets = getSheetsClient();
       const spreadsheetId = this.getSpreadsheetId();
@@ -80,43 +81,42 @@ export class SheetsRepository {
 
       const rows = response.data.values || [];
 
-      const candidates: Candidate[] = rows.map((row) => ({
-        candidate_id: String(row[0] || ""),
-        full_name: String(row[1] || ""),
-        id_number: String(row[2] || ""),
-        email: String(row[3] || ""),
-        phone: String(row[4] || ""),
-        vendor_id: String(row[5] || ""),
-        project_id: String(row[6] || ""),
-        drive_folder_id: String(row[7] || ""),
-        current_stage_id: String(row[8] || "stage_1"),
-        is_completed: String(row[9] ?? "").toUpperCase() === "TRUE",
-        created_at: String(row[10] || new Date().toISOString()),
-        updated_at: String(row[11] || new Date().toISOString()),
-        access_token: row[12] ? String(row[12]) : null,
-        token_expires_at: row[13] ? String(row[13]) : null,
-        is_signed_by_candidate: String(row[14] ?? "").toUpperCase() === "TRUE",
-        signature_url: row[15] ? String(row[15]) : null,
-      }));
-
-      if (candidates.length > 0) {
-        return candidates.filter((c) => {
-          if (filter?.vendor_id !== undefined && c.vendor_id !== filter.vendor_id) {
-            return false;
-          }
-          if (filter?.is_completed !== undefined && c.is_completed !== filter.is_completed) {
-            return false;
-          }
-          return true;
-        });
-      }
+      sheetCandidates = rows
+        .map((row) => ({
+          candidate_id: String(row[0] || ""),
+          full_name: String(row[1] || ""),
+          id_number: String(row[2] || ""),
+          email: String(row[3] || ""),
+          phone: String(row[4] || ""),
+          vendor_id: String(row[5] || ""),
+          project_id: String(row[6] || ""),
+          drive_folder_id: String(row[7] || ""),
+          current_stage_id: String(row[8] || "stage_1"),
+          is_completed: String(row[9] ?? "").toUpperCase() === "TRUE",
+          created_at: String(row[10] || new Date().toISOString()),
+          updated_at: String(row[11] || new Date().toISOString()),
+          access_token: row[12] ? String(row[12]) : null,
+          token_expires_at: row[13] ? String(row[13]) : null,
+          is_signed_by_candidate: String(row[14] ?? "").toUpperCase() === "TRUE",
+          signature_url: row[15] ? String(row[15]) : null,
+        }))
+        .filter((c) => c.candidate_id && c.candidate_id.trim().length > 0);
     } catch {
-      // Ignore Google Sheets fetch error and use testStore fallback
+      // Ignore Google Sheets fetch error and merge with testStore
     }
 
-    // Fallback: Read from local test store
+    // Always merge with local/fallback test store
     const testStore = loadTestStore();
-    return testStore.candidates.filter((c) => {
+    const sheetIds = new Set(sheetCandidates.map((c) => c.candidate_id));
+    const allCandidates = [...sheetCandidates];
+
+    for (const testCand of testStore.candidates) {
+      if (!sheetIds.has(testCand.candidate_id)) {
+        allCandidates.unshift(testCand);
+      }
+    }
+
+    return allCandidates.filter((c) => {
       if (filter?.vendor_id !== undefined && c.vendor_id !== filter.vendor_id) {
         return false;
       }
@@ -131,8 +131,17 @@ export class SheetsRepository {
    * Retrieves a candidate by unique candidate_id.
    */
   async getCandidateById(candidate_id: string): Promise<Candidate | null> {
+    if (!candidate_id) return null;
     const candidates = await this.getCandidates();
-    return candidates.find((c) => c.candidate_id === candidate_id) || null;
+    const found = candidates.find((c) => c.candidate_id === candidate_id);
+    if (found) return found;
+
+    // Direct fallback to testStore
+    const testStore = loadTestStore();
+    const testCand = testStore.candidates.find((c) => c.candidate_id === candidate_id);
+    if (testCand) return testCand;
+
+    return null;
   }
 
   /**
@@ -141,8 +150,15 @@ export class SheetsRepository {
   async getCandidateByToken(token: string): Promise<Candidate | null> {
     if (!token) return null;
     const candidates = await this.getCandidates();
+    const found = candidates.find(
+      (c) => c.access_token === token || c.candidate_id === token
+    );
+    if (found) return found;
+
+    // Direct fallback to testStore
+    const testStore = loadTestStore();
     return (
-      candidates.find(
+      testStore.candidates.find(
         (c) => c.access_token === token || c.candidate_id === token
       ) || null
     );
@@ -498,6 +514,7 @@ export class SheetsRepository {
    * Retrieves checklist items for a specific candidate.
    */
   async getChecklist(candidate_id: string): Promise<ChecklistItem[]> {
+    let sheetItems: ChecklistItem[] = [];
     try {
       const sheets = getSheetsClient();
       const spreadsheetId = this.getSpreadsheetId();
@@ -509,7 +526,7 @@ export class SheetsRepository {
 
       const rows = response.data.values || [];
 
-      const items: ChecklistItem[] = rows
+      sheetItems = rows
         .filter((row) => String(row[1] || "") === candidate_id)
         .map((row) => ({
           checklist_item_id: String(row[0] || ""),
@@ -521,14 +538,31 @@ export class SheetsRepository {
           file_drive_url: row[6] ? String(row[6]) : null,
           updated_at: String(row[7] || new Date().toISOString()),
         }));
-
-      if (items.length > 0) return items;
     } catch {
       // Ignore and fallback to testStore
     }
 
     const testStore = loadTestStore();
-    return testStore.checklistItems.filter((item) => item.candidate_id === candidate_id);
+    const testItems = testStore.checklistItems.filter((item) => item.candidate_id === candidate_id);
+
+    // Merge sheet items and test items
+    const merged = [...sheetItems];
+    const sheetDocTypeIds = new Set(sheetItems.map((i) => i.doc_type_id));
+    for (const tItem of testItems) {
+      if (!sheetDocTypeIds.has(tItem.doc_type_id)) {
+        merged.push(tItem);
+      }
+    }
+
+    if (merged.length > 0) {
+      return merged;
+    }
+
+    // Auto-initialize if still empty
+    const docTypes = await this.getDocumentTypes();
+    await this.initChecklist(candidate_id, docTypes);
+    const refreshed = loadTestStore();
+    return refreshed.checklistItems.filter((item) => item.candidate_id === candidate_id);
   }
 
   /**

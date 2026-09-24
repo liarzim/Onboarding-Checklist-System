@@ -20,12 +20,22 @@ export async function createCandidateFolder(
     const drive = getDriveClient();
     const env = getEnv();
 
+    const requestBody: { name: string; mimeType: string; parents?: string[] } = {
+      name: folderName,
+      mimeType: "application/vnd.google-apps.folder",
+    };
+
+    const rootFolderId = (env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "").trim();
+    if (
+      rootFolderId &&
+      rootFolderId !== "your_google_drive_folder_id_here" &&
+      rootFolderId.length > 5
+    ) {
+      requestBody.parents = [rootFolderId];
+    }
+
     const response = await drive.files.create({
-      requestBody: {
-        name: folderName,
-        mimeType: "application/vnd.google-apps.folder",
-        parents: [env.GOOGLE_DRIVE_ROOT_FOLDER_ID],
-      },
+      requestBody,
       fields: "id, name, webViewLink",
       supportsAllDrives: true,
     });
