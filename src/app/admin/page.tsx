@@ -16,6 +16,13 @@ import {
   CreditCard,
   Building,
   RefreshCw,
+  UserPlus,
+  X,
+  Phone,
+  Mail,
+  User,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 
 interface CandidateRecord {
@@ -63,6 +70,59 @@ export default function AdminDashboardPage() {
   const [selectedVendor, setSelectedVendor] = useState("");
   const [selectedProject, setSelectedProject] = useState("");
   const [selectedStage, setSelectedStage] = useState("");
+
+  // Add Candidate Modal State (HR / Admin)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [creatingCandidate, setCreatingCandidate] = useState(false);
+  const [candidateFormError, setCandidateFormError] = useState<string | null>(null);
+  const [createdCandidateInfo, setCreatedCandidateInfo] = useState<{
+    candidate_id: string;
+    full_name: string;
+    access_token?: string;
+  } | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [formData, setFormData] = useState({
+    full_name: "",
+    id_number: "",
+    vendor_id: "",
+    project_id: "",
+    email: "",
+    phone: "",
+  });
+
+  async function handleCreateCandidate(e: React.FormEvent) {
+    e.preventDefault();
+    setCandidateFormError(null);
+    setCreatingCandidate(true);
+
+    try {
+      const res = await fetch("/api/admin/candidates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "שגיאה ביצירת המועמד");
+      }
+
+      setCreatedCandidateInfo(data.candidate);
+      setFormData({
+        full_name: "",
+        id_number: "",
+        vendor_id: "",
+        project_id: "",
+        email: "",
+        phone: "",
+      });
+      await loadData();
+    } catch (err) {
+      setCandidateFormError(err instanceof Error ? err.message : "שגיאה ביצירת המועמד");
+    } finally {
+      setCreatingCandidate(false);
+    }
+  }
 
   async function loadData() {
     try {
@@ -161,14 +221,28 @@ export default function AdminDashboardPage() {
           </p>
         </div>
 
-        <button
-          onClick={loadData}
-          disabled={loading}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition shadow-xs cursor-pointer self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-          <span>רענן נתונים</span>
-        </button>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <button
+            onClick={() => {
+              setCreatedCandidateInfo(null);
+              setCandidateFormError(null);
+              setIsAddModalOpen(true);
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition shadow-sm shadow-blue-500/20 cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>הוספת מועמד חדש</span>
+          </button>
+
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition shadow-xs cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            <span>רענן נתונים</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI Stat Cards */}
@@ -427,6 +501,273 @@ export default function AdminDashboardPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Add Candidate Modal (HR / Admin) */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden text-right">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">הוספת מועמד חדש לקליטה</h3>
+                  <p className="text-slate-500 text-xs mt-0.5">
+                    פתיחת תיק מועמד ע&quot;י משאבי אנוש (HR) ושיוך לספק
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddModalOpen(false);
+                  setCreatedCandidateInfo(null);
+                }}
+                className="w-8 h-8 rounded-full hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6">
+              {createdCandidateInfo ? (
+                /* Success View */
+                <div className="space-y-4">
+                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs">
+                    <div className="flex items-center gap-2 font-bold text-sm text-emerald-900 mb-1">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>המועמד נוצר בהצלחה ונפתח עבורו תיק קליטה!</span>
+                    </div>
+                    <p>
+                      נוצרה תיקיית Google Drive ייעודית והופקו 11 פריטי הצ&apos;קליסט לקליטה.
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                    <div className="flex justify-between py-1 border-b border-slate-200">
+                      <span className="text-slate-500">שם המועמד:</span>
+                      <span className="font-bold text-slate-900">{createdCandidateInfo.full_name}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-slate-200">
+                      <span className="text-slate-500">מזהה מועמד:</span>
+                      <span className="font-mono text-slate-700">{createdCandidateInfo.candidate_id}</span>
+                    </div>
+                  </div>
+
+                  {/* Candidate Portal Link Box */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      קישור אישי לפורטל המועמד (מילוי וחתימה על מסמכים):
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={
+                          typeof window !== "undefined"
+                            ? `${window.location.origin}/portal/${createdCandidateInfo.access_token || createdCandidateInfo.candidate_id}`
+                            : `/portal/${createdCandidateInfo.access_token || createdCandidateInfo.candidate_id}`
+                        }
+                        className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-100 font-mono text-slate-600 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = `${window.location.origin}/portal/${createdCandidateInfo.access_token || createdCandidateInfo.candidate_id}`;
+                          navigator.clipboard.writeText(url);
+                          setCopiedLink(true);
+                          setTimeout(() => setCopiedLink(false), 3000);
+                        }}
+                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
+                      >
+                        {copiedLink ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>הועתק!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>העתק קישור</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 flex items-center gap-3">
+                    <Link
+                      href={`/admin/candidate/${createdCandidateInfo.candidate_id}`}
+                      className="flex-1 py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl text-center transition flex items-center justify-center gap-1.5"
+                    >
+                      <span>מעבר לתיק המועמד</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setCreatedCandidateInfo(null)}
+                      className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition"
+                    >
+                      הוסף מועמד נוסף
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Form View */
+                <form onSubmit={handleCreateCandidate} className="space-y-4">
+                  {candidateFormError && (
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                      <span>{candidateFormError}</span>
+                    </div>
+                  )}
+
+                  {/* Vendor Selection */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      שיוך לספק / קליטה ישירה *
+                    </label>
+                    <div className="relative">
+                      <Building className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                      <select
+                        required
+                        value={formData.vendor_id}
+                        onChange={(e) => setFormData({ ...formData, vendor_id: e.target.value })}
+                        className="w-full pr-10 pl-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
+                      >
+                        <option value="">-- בחר ספק אחראי --</option>
+                        <option value="direct_hire">קליטה ישירה (משרד ממשלתי / פנימי)</option>
+                        {vendors.map((v) => (
+                          <option key={v.vendor_id} value={v.vendor_id}>
+                            {v.company_name} ({v.vendor_id})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Full Name */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      שם מלא של המועמד *
+                    </label>
+                    <div className="relative">
+                      <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        required
+                        value={formData.full_name}
+                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                        placeholder="למשל: ישראל ישראלי"
+                        className="w-full pr-10 pl-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* ID Number */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      מספר תעודת זהות *
+                    </label>
+                    <div className="relative">
+                      <CreditCard className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        required
+                        value={formData.id_number}
+                        onChange={(e) => setFormData({ ...formData, id_number: e.target.value })}
+                        placeholder="9 ספרות"
+                        className="w-full pr-10 pl-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Project ID */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      פרויקט / אגף יעד *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.project_id}
+                      onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
+                      placeholder="למשל: מרכב״ה - תשתיות ומיכון"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Email & Phone */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        כתובת אימייל *
+                      </label>
+                      <div className="relative">
+                        <Mail className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="email"
+                          required
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          placeholder="candidate@example.com"
+                          className="w-full pr-10 pl-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        מספר טלפון *
+                      </label>
+                      <div className="relative">
+                        <Phone className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="tel"
+                          required
+                          value={formData.phone}
+                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                          placeholder="050-1234567"
+                          className="w-full pr-10 pl-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddModalOpen(false)}
+                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition"
+                    >
+                      ביטול
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={creatingCandidate}
+                      className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/20 transition flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {creatingCandidate ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>יוצר מועמד ותיקייה...</span>
+                        </>
+                      ) : (
+                        <span>צור מועמד ופתח תהליך</span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}
