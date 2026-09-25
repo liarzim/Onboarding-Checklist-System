@@ -122,10 +122,16 @@ export default function TestingSandboxBar({
       if (res.ok) {
         if (typeof window !== "undefined") {
           localStorage.removeItem("onboarding_demo_candidates");
+          localStorage.removeItem("onboarding_local_uploads");
+          sessionStorage.clear();
         }
         alert(data.message || "נתוני הבדיקה אופסו בהצלחה למצב 0!");
         onDataReset?.();
-        router.refresh();
+        if (typeof window !== "undefined") {
+          window.location.reload();
+        } else {
+          router.refresh();
+        }
       }
     } catch (err) {
       console.error("Error resetting data:", err);
