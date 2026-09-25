@@ -39,6 +39,9 @@ export function getInitialTestStorage(): TestStorageData {
 }
 
 export function getDemoCookieCandidates(): Candidate[] {
+  if (process.env.VERCEL_ENV === "production" || process.env.NEXT_PUBLIC_VERCEL_ENV === "production") {
+    return [];
+  }
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { cookies } = require("next/headers");
@@ -56,6 +59,9 @@ export function getDemoCookieCandidates(): Candidate[] {
 }
 
 export function setDemoCandidateCookie(response: any, candidate: Candidate): void {
+  if (process.env.VERCEL_ENV === "production" || process.env.NEXT_PUBLIC_VERCEL_ENV === "production") {
+    return;
+  }
   try {
     const existingList = getDemoCookieCandidates();
     const idx = existingList.findIndex((c) => c.candidate_id === candidate.candidate_id);
@@ -76,6 +82,9 @@ export function setDemoCandidateCookie(response: any, candidate: Candidate): voi
 }
 
 export function loadTestStore(): TestStorageData {
+  if (process.env.VERCEL_ENV === "production" || process.env.NEXT_PUBLIC_VERCEL_ENV === "production") {
+    return getInitialTestStorage();
+  }
   let store = global.__testStoreMemoryStorage;
 
   if (!store) {

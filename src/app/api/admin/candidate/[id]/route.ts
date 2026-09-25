@@ -106,3 +106,26 @@ export async function GET(
     return NextResponse.json({ error: "Server Error", message }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getAdminSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const candidateId = params.id;
+    await sheetsRepository.deleteCandidate(candidateId);
+
+    return NextResponse.json({
+      success: true,
+      message: "המועמד נמחק בהצלחה",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "שגיאה במחיקת המועמד";
+    return NextResponse.json({ error: "Server Error", message }, { status: 500 });
+  }
+}

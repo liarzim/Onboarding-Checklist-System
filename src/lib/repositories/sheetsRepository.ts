@@ -1,5 +1,5 @@
 import { getSheetsClient } from "../google";
-import { getEnv } from "../env";
+import { getEnv, isProduction } from "../env";
 import { loadTestStore, saveTestStore } from "../testStore";
 import type {
   Candidate,
@@ -162,17 +162,19 @@ export class SheetsRepository {
       // Ignore Google Sheets fetch error and merge with testStore
     }
 
-    // Always merge with local/fallback test store
-    const testStore = loadTestStore();
-    const sheetIds = new Set(sheetCandidates.map((c) => c.candidate_id));
+    // In Production: NEVER merge local test store or demo cookies. Only return real data from Google Sheets!
     const allCandidates = [...sheetCandidates];
+    if (!isProduction()) {
+      const testStore = loadTestStore();
+      const sheetIds = new Set(sheetCandidates.map((c) => c.candidate_id));
 
-    for (const testCand of testStore.candidates) {
-      if (!sheetIds.has(testCand.candidate_id)) {
-        allCandidates.unshift(testCand);
-        // Auto-sync: if Google Sheets is connected, write this local candidate to Google Sheets so all devices see it!
-        if (isSheetsConnected) {
-          this.appendCandidateToSheet(testCand).catch(() => {});
+      for (const testCand of testStore.candidates) {
+        if (!sheetIds.has(testCand.candidate_id)) {
+          allCandidates.unshift(testCand);
+          // Auto-sync: if Google Sheets is connected in staging/dev, write this local candidate to Google Sheets
+          if (isSheetsConnected) {
+            this.appendCandidateToSheet(testCand).catch(() => {});
+          }
         }
       }
     }
@@ -197,10 +199,12 @@ export class SheetsRepository {
     const found = candidates.find((c) => c.candidate_id === candidate_id);
     if (found) return found;
 
-    // Direct fallback to testStore
-    const testStore = loadTestStore();
-    const testCand = testStore.candidates.find((c) => c.candidate_id === candidate_id);
-    if (testCand) return testCand;
+    // Direct fallback to testStore only in non-production
+    if (!isProduction()) {
+      const testStore = loadTestStore();
+      const testCand = testStore.candidates.find((c) => c.candidate_id === candidate_id);
+      if (testCand) return testCand;
+    }
 
     return null;
   }
@@ -216,13 +220,53 @@ export class SheetsRepository {
     );
     if (found) return found;
 
-    // Direct fallback to testStore
+    // Direct fallback to testStore only in non-production
+    if (!isProduction()) {
+      const testStore = loadTestStore();
+      return (
+        testStore.candidates.find(
+          (c) => c.access_token === token || c.candidate_id === token
+        ) || null
+      );
+    }
+
+    return null;
+  }
+
+  /**
+   * Deletes a candidate from Candidates sheet and testStore.
+   */
+  async deleteCandidate(candidate_id: string): Promise<void> {
+    // 1. Delete from local testStore
     const testStore = loadTestStore();
-    return (
-      testStore.candidates.find(
-        (c) => c.access_token === token || c.candidate_id === token
-      ) || null
-    );
+    testStore.candidates = testStore.candidates.filter((c) => c.candidate_id !== candidate_id);
+    testStore.checklistItems = testStore.checklistItems.filter((i) => !i.checklist_item_id.startsWith(candidate_id));
+    saveTestStore(testStore);
+
+    // 2. Delete from Google Sheets if connected
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
+      if (!spreadsheetId) return;
+
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CANDIDATES}!A2:A`,
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex((row) => String(row[0] || "") === candidate_id);
+
+      if (rowIndex >= 0) {
+        const sheetRowNumber = rowIndex + 2;
+        await sheets.spreadsheets.values.clear({
+          spreadsheetId,
+          range: `${SHEET_NAMES.CANDIDATES}!A${sheetRowNumber}:P${sheetRowNumber}`,
+        });
+      }
+    } catch (err) {
+      console.warn("Sheets deleteCandidate fallback:", err);
+    }
   }
 
   /**

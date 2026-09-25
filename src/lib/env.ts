@@ -120,3 +120,24 @@ export const env = new Proxy({} as Env, {
     return getEnv()[prop as keyof Env];
   },
 });
+
+export function isProduction(): boolean {
+  if (process.env.VERCEL_ENV === "production") return true;
+  if (process.env.NEXT_PUBLIC_VERCEL_ENV === "production") return true;
+  return false;
+}
+
+export function isClientProduction(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  if (
+    host.includes("localhost") ||
+    host.includes("127.0.0.1") ||
+    host.includes("-git-") ||
+    host.includes("staging") ||
+    host.includes("preview")
+  ) {
+    return false;
+  }
+  return true;
+}

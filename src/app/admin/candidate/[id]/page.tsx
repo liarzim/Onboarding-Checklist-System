@@ -18,6 +18,7 @@ import {
   Loader2,
   ShieldCheck,
   Clock,
+  Trash2,
 } from "lucide-react";
 
 interface CandidateInfo {
@@ -192,6 +193,41 @@ export default function AdminCandidateReviewPage() {
     }
   }
 
+  const [deletingCandidate, setDeletingCandidate] = useState(false);
+
+  async function handleDeleteCandidate() {
+    if (!window.confirm(`האם אתה בטוח שברצונך למחוק את המועמד "${candidate?.full_name}" לחלוטין מהמערכת?`)) {
+      return;
+    }
+    setDeletingCandidate(true);
+    try {
+      const res = await fetch(`/api/admin/candidate/${candidateId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "שגיאה במחיקת המועמד");
+      }
+      if (typeof window !== "undefined") {
+        try {
+          const local = localStorage.getItem("onboarding_demo_candidates");
+          if (local) {
+            const parsed = JSON.parse(local);
+            const filtered = parsed.filter((c: any) => c.candidate_id !== candidateId);
+            localStorage.setItem("onboarding_demo_candidates", JSON.stringify(filtered));
+          }
+        } catch {}
+      }
+      alert("המועמד נמחק בהצלחה מהמערכת");
+      router.push("/admin");
+      router.refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "שגיאה במחיקת המועמד");
+    } finally {
+      setDeletingCandidate(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center flex flex-col items-center justify-center gap-3">
@@ -226,14 +262,30 @@ export default function AdminCandidateReviewPage() {
 
   return (
     <div className="space-y-6">
-      {/* Navigation Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-slate-500">
-        <Link href="/admin" className="hover:text-blue-600 transition flex items-center gap-1">
-          <ArrowRight className="w-4 h-4" />
-          <span>חזרה למועמדים פעילים</span>
-        </Link>
-        <span>/</span>
-        <span className="text-slate-800 font-medium">{candidate.full_name}</span>
+      {/* Navigation Breadcrumb & Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <Link href="/admin" className="hover:text-blue-600 transition flex items-center gap-1">
+            <ArrowRight className="w-4 h-4" />
+            <span>חזרה למועמדים פעילים</span>
+          </Link>
+          <span>/</span>
+          <span className="text-slate-800 font-medium">{candidate.full_name}</span>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleDeleteCandidate}
+          disabled={deletingCandidate}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-semibold transition disabled:opacity-50 self-start sm:self-auto shadow-xs"
+        >
+          {deletingCandidate ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+          )}
+          <span>מחק מועמד מהמערכת</span>
+        </button>
       </div>
 
       {/* Candidate Profile Header Card */}

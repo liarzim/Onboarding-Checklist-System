@@ -134,6 +134,10 @@ export default function TestingSandboxBar({
     }
   }
 
+  if (envName === "production") {
+    return null;
+  }
+
   return (
     <div
       dir="rtl"
@@ -153,10 +157,6 @@ export default function TestingSandboxBar({
               {envName === "staging" ? (
                 <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
                   סביבת בדיקות (Staging)
-                </span>
-              ) : envName === "production" ? (
-                <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200">
-                  סביבת ייצור (Production)
                 </span>
               ) : (
                 <span className="text-[10px] font-bold bg-slate-200 text-slate-800 px-2 py-0.5 rounded-full">

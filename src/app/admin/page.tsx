@@ -210,22 +210,36 @@ export default function AdminDashboardPage() {
 
       let fetchedCandidates = candidatesData.candidates || [];
       if (typeof window !== "undefined") {
-        if (fetchedCandidates.length > 0) {
-          localStorage.setItem("onboarding_demo_candidates", JSON.stringify(fetchedCandidates));
+        const host = window.location.hostname;
+        const isClientProd =
+          !host.includes("localhost") &&
+          !host.includes("127.0.0.1") &&
+          !host.includes("-git-") &&
+          !host.includes("staging") &&
+          !host.includes("preview");
+
+        if (isClientProd) {
+          // In Production: clean up any legacy demo candidates from local storage and do NOT load them!
+          localStorage.removeItem("onboarding_demo_candidates");
         } else {
-          const local = localStorage.getItem("onboarding_demo_candidates");
-          if (local) {
-            try {
-              const parsed = JSON.parse(local);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                fetchedCandidates = parsed;
-                fetch("/api/demo/sync", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ candidates: parsed }),
-                }).catch(() => {});
-              }
-            } catch {}
+          // Only in Staging / Local development allow demo candidates fallback
+          if (fetchedCandidates.length > 0) {
+            localStorage.setItem("onboarding_demo_candidates", JSON.stringify(fetchedCandidates));
+          } else {
+            const local = localStorage.getItem("onboarding_demo_candidates");
+            if (local) {
+              try {
+                const parsed = JSON.parse(local);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  fetchedCandidates = parsed;
+                  fetch("/api/demo/sync", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ candidates: parsed }),
+                  }).catch(() => {});
+                }
+              } catch {}
+            }
           }
         }
       }
