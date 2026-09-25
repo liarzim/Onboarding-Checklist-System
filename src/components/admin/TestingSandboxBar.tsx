@@ -21,7 +21,7 @@ interface VendorOption {
 interface CandidateOption {
   candidate_id: string;
   full_name: string;
-  access_token?: string;
+  access_token?: string | null;
 }
 
 interface TestingSandboxBarProps {

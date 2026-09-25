@@ -27,9 +27,11 @@ import {
 } from "lucide-react";
 import { validateIsraeliId } from "@/lib/israeliId";
 import TestingSandboxBar from "@/components/admin/TestingSandboxBar";
+import CandidatePortalLink from "@/components/common/CandidatePortalLink";
 
 interface CandidateRecord {
   candidate_id: string;
+  access_token?: string | null;
   full_name: string;
   id_number: string;
   email: string;
@@ -543,6 +545,7 @@ export default function AdminDashboardPage() {
                   <th className="py-4 px-6">חברת ספק</th>
                   <th className="py-4 px-6">פרויקט</th>
                   <th className="py-4 px-6">שלב נוכחי</th>
+                  <th className="py-4 px-6">לינק למועמד</th>
                   <th className="py-4 px-6">יחס מסמכים</th>
                   <th className="py-4 px-6">עודכן לאחרונה</th>
                   <th className="py-4 px-6 text-left">פעולות</th>
@@ -585,6 +588,15 @@ export default function AdminDashboardPage() {
                       >
                         {candidate.stage_name}
                       </span>
+                    </td>
+                    <td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
+                      <CandidatePortalLink
+                        candidateId={candidate.candidate_id}
+                        accessToken={candidate.access_token}
+                        candidateName={candidate.full_name}
+                        candidatePhone={candidate.phone}
+                        variant="table-row"
+                      />
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-2">

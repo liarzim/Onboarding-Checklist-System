@@ -19,9 +19,11 @@ import {
   CreditCard,
 } from "lucide-react";
 import { validateIsraeliId } from "@/lib/israeliId";
+import CandidatePortalLink from "@/components/common/CandidatePortalLink";
 
 interface CandidateItem {
   candidate_id: string;
+  access_token?: string | null;
   full_name: string;
   id_number: string;
   email: string;
@@ -301,6 +303,7 @@ export default function VendorDashboardPage() {
                   <th className="py-4 px-6">ת.ז.</th>
                   <th className="py-4 px-6">פרויקט</th>
                   <th className="py-4 px-6">שלב נוכחי</th>
+                  <th className="py-4 px-6">לינק למועמד</th>
                   <th className="py-4 px-6">השלמת מסמכים</th>
                   <th className="py-4 px-6 text-left">פעולות</th>
                 </tr>
@@ -333,6 +336,15 @@ export default function VendorDashboardPage() {
                           ? "איסוף מסמכים"
                           : candidate.current_stage_id}
                       </span>
+                    </td>
+                    <td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
+                      <CandidatePortalLink
+                        candidateId={candidate.candidate_id}
+                        accessToken={candidate.access_token}
+                        candidateName={candidate.full_name}
+                        candidatePhone={candidate.phone}
+                        variant="table-row"
+                      />
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">

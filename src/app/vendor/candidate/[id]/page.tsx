@@ -19,9 +19,11 @@ import {
   Camera,
   Image as ImageIcon,
 } from "lucide-react";
+import CandidatePortalLink from "@/components/common/CandidatePortalLink";
 
 interface CandidateInfo {
   candidate_id: string;
+  access_token?: string | null;
   full_name: string;
   id_number: string;
   email: string;
@@ -312,6 +314,15 @@ export default function CandidateChecklistPage() {
           </div>
         </div>
       </div>
+
+      {/* Candidate Portal Personal Link Card */}
+      <CandidatePortalLink
+        candidateId={candidate.candidate_id}
+        accessToken={candidate.access_token}
+        candidateName={candidate.full_name}
+        candidatePhone={candidate.phone}
+        variant="card"
+      />
 
       {/* Global Upload Notification Toast */}
       {uploadMessage && (

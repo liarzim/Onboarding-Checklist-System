@@ -15,9 +15,11 @@ import {
   FileCheck2,
   RefreshCw,
 } from "lucide-react";
+import CandidatePortalLink from "@/components/common/CandidatePortalLink";
 
 interface CompletedCandidate {
   candidate_id: string;
+  access_token?: string | null;
   full_name: string;
   id_number: string;
   email: string;
@@ -277,6 +279,7 @@ export default function CompletedCandidatesPage() {
                   <th className="py-4 px-6">חברת ספק</th>
                   <th className="py-4 px-6">פרויקט</th>
                   <th className="py-4 px-6">תאריך אישור והנפקה</th>
+                  <th className="py-4 px-6">לינק מועמד</th>
                   <th className="py-4 px-6">תיקיית Drive קבועה</th>
                   <th className="py-4 px-6 text-left">תיק מועמד</th>
                 </tr>
@@ -308,6 +311,15 @@ export default function CompletedCandidatesPage() {
                     </td>
                     <td className="py-4 px-6 text-xs text-slate-600">
                       {new Date(candidate.updated_at).toLocaleString("he-IL")}
+                    </td>
+                    <td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
+                      <CandidatePortalLink
+                        candidateId={candidate.candidate_id}
+                        accessToken={candidate.access_token}
+                        candidateName={candidate.full_name}
+                        candidatePhone={candidate.phone}
+                        variant="table-row"
+                      />
                     </td>
                     <td className="py-4 px-6">
                       {candidate.drive_folder_id ? (
