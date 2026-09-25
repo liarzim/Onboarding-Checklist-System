@@ -34,6 +34,22 @@ function UnifiedIdentificationContent() {
     tabParam === "register" ? "register" : "login"
   );
 
+  const [isStaging, setIsStaging] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname;
+      const isProd =
+        host === "onboardingchecklistsystem.vercel.app" ||
+        (process.env.NEXT_PUBLIC_VERCEL_ENV === "production" &&
+          !host.includes("staging") &&
+          !host.includes("-git-") &&
+          !host.includes("localhost") &&
+          !host.includes("127.0.0.1"));
+      setIsStaging(!isProd);
+    }
+  }, []);
+
   // Login form state
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -182,10 +198,28 @@ function UnifiedIdentificationContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900 text-slate-100" dir="rtl">
-      <div className="max-w-md w-full bg-slate-800 rounded-3xl border border-slate-700 shadow-2xl p-6 sm:p-8 space-y-6">
+    <div className="relative min-h-screen flex items-center justify-center p-4 bg-slate-900 text-slate-100 overflow-hidden" dir="rtl">
+      {/* Background Big TEST for Staging */}
+      {isStaging && (
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden z-0"
+        >
+          <div className="text-[140px] sm:text-[220px] md:text-[300px] font-black text-amber-500/10 tracking-widest -rotate-12 uppercase select-none">
+            טסט
+          </div>
+        </div>
+      )}
+
+      <div className="relative z-10 max-w-md w-full bg-slate-800 rounded-3xl border border-slate-700 shadow-2xl p-6 sm:p-8 space-y-6">
         {/* Brand / System Logo Header */}
         <div className="text-center space-y-3">
+          {isStaging && (
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold tracking-wide animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-amber-400" />
+              <span>סביבת בדיקות (STAGING / טסט)</span>
+            </div>
+          )}
           <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl bg-white/10 p-2 flex items-center justify-center mx-auto shadow-xl shadow-blue-500/10 border border-slate-700/60">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
