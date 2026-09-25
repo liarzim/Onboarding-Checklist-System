@@ -47,19 +47,27 @@ export async function GET(request: Request) {
   let envVars: ReturnType<typeof getEnv>;
   try {
     envVars = getEnv();
+    const sheetId = envVars.GOOGLE_SPREADSHEET_ID || "";
+    const driveId = envVars.GOOGLE_DRIVE_ROOT_FOLDER_ID || "";
+    const saEmail = envVars.GOOGLE_SERVICE_ACCOUNT_EMAIL || "";
+
     services.environment = {
       status: "ok",
       details: {
-        serviceAccountConfigured: Boolean(envVars.GOOGLE_SERVICE_ACCOUNT_EMAIL),
-        spreadsheetConfigured: Boolean(envVars.GOOGLE_SPREADSHEET_ID),
-        driveRootConfigured: Boolean(envVars.GOOGLE_DRIVE_ROOT_FOLDER_ID),
+        vercelEnv: process.env.VERCEL_ENV || "local",
+        serviceAccountConfigured: Boolean(saEmail),
+        serviceAccountEmail: saEmail,
+        spreadsheetConfigured: Boolean(sheetId),
+        spreadsheetIdPreview: sheetId.length > 8 ? `${sheetId.slice(0, 5)}...${sheetId.slice(-5)}` : (sheetId ? "set" : "not_set"),
+        driveRootConfigured: Boolean(driveId),
+        driveFolderIdPreview: driveId.length > 8 ? `${driveId.slice(0, 5)}...${driveId.slice(-5)}` : (driveId ? "set" : "not_set"),
       },
     };
-  } catch (error) {
+  } catch (error: any) {
     isHealthy = false;
     services.environment = {
       status: "error",
-      error: "Environment configuration failure",
+      error: error?.message || "Environment configuration failure",
     };
 
     return NextResponse.json(
@@ -67,7 +75,7 @@ export async function GET(request: Request) {
         status: "unhealthy",
         timestamp,
         services,
-        error: "Environment configuration failure",
+        error: error?.message || "Environment configuration failure",
       },
       { status: 500 }
     );
@@ -78,23 +86,27 @@ export async function GET(request: Request) {
     const sheets = getSheetsClient();
     const sheetResponse = await sheets.spreadsheets.get({
       spreadsheetId: envVars.GOOGLE_SPREADSHEET_ID,
-      fields: "sheets.properties.title",
+      fields: "properties.title,sheets.properties.title",
     });
 
+    const sheetTitle = sheetResponse.data.properties?.title || "גיליון ללא שם";
     const tabCount = (sheetResponse.data.sheets || []).length;
+    const tabNames = (sheetResponse.data.sheets || []).map((s) => s.properties?.title).filter(Boolean);
 
     services.googleSheets = {
       status: "ok",
       details: {
         connected: true,
+        sheetTitle,
         tabCount,
+        tabNames,
       },
     };
-  } catch (error) {
+  } catch (error: any) {
     isHealthy = false;
     services.googleSheets = {
       status: "error",
-      error: "Failed to read Google Sheet",
+      error: error?.message || "Failed to read Google Sheet",
     };
   }
 
@@ -104,24 +116,26 @@ export async function GET(request: Request) {
 
     const folderResponse = await drive.files.get({
       fileId: envVars.GOOGLE_DRIVE_ROOT_FOLDER_ID,
-      fields: "id, capabilities(canAddChildren)",
+      fields: "id, name, capabilities(canAddChildren)",
       supportsAllDrives: true,
     });
 
+    const folderName = folderResponse.data.name || "תיקייה ללא שם";
     const canAddChildren = Boolean(folderResponse.data.capabilities?.canAddChildren);
 
     services.googleDrive = {
       status: "ok",
       details: {
         connected: true,
+        folderName,
         canAddChildren,
       },
     };
-  } catch (error) {
+  } catch (error: any) {
     isHealthy = false;
     services.googleDrive = {
       status: "error",
-      error: "Failed to verify Google Drive root access",
+      error: error?.message || "Failed to verify Google Drive root access",
     };
   }
 
