@@ -12,6 +12,8 @@ export async function POST(request: Request) {
     // 1. Reset all in-memory and temporary file storage back to State 0
     resetTestStoreToStateZero();
 
+    let deletedDriveCount = 0;
+
     // 2. If in staging/dev and Google Sheets is connected, clear rows 2+
     if (!isProduction()) {
       try {
@@ -37,18 +39,28 @@ export async function POST(request: Request) {
               range: `${SHEET_NAMES.AUDIT_LOGS}!A2:G`,
             }),
           ]);
-
-          // Also clean up candidate folders from Google Drive root directory
-          await cleanupOrphanedDriveFolders([]);
         }
       } catch (sheetErr) {
         console.warn("Could not clear sheets on reset:", sheetErr);
       }
+
+      // Always attempt to delete all candidate folders from Google Drive root directory on reset
+      try {
+        deletedDriveCount = await cleanupOrphanedDriveFolders([]);
+      } catch (driveErr) {
+        console.warn("Could not clear drive folders on reset:", driveErr);
+      }
     }
+
+    const message =
+      deletedDriveCount > 0
+        ? `סביבת ה-Staging אופסה בהצלחה: נמחקו המועמדים מהגיליון ו-${deletedDriveCount} תיקיות מ-Google Drive!`
+        : "סביבת ה-Staging אופסה בהצלחה למצב 0 (כל המועמדים, העוגיות ונתוני הבדיקה נוקו)!";
 
     const response = NextResponse.json({
       success: true,
-      message: "סביבת ה-Staging אופסה בהצלחה למצב 0 (כל המועמדים, העוגיות ונתוני הבדיקה נוקו)!",
+      deletedDriveCount,
+      message,
     });
 
     // 3. Clear demo cookies

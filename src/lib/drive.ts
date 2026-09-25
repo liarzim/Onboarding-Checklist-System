@@ -158,26 +158,47 @@ export async function deleteCandidateFolder(
   candidateId?: string | null
 ): Promise<void> {
   const drive = getDriveClient();
+  const env = getEnv();
+  const rootFolderId = extractDriveFolderId((env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "").trim());
 
-  // 1. Direct deletion if folderId is provided
-  if (folderId) {
-    const cleanId = extractDriveFolderId(folderId).trim();
-    if (cleanId && !cleanId.startsWith("test_drive_folder_")) {
+  async function removeFolderById(id: string): Promise<boolean> {
+    const cleanId = extractDriveFolderId(id).trim();
+    if (!cleanId || cleanId.startsWith("test_drive_folder_")) return false;
+
+    let success = false;
+    // 1. Permanent delete
+    try {
+      await drive.files.delete({ fileId: cleanId, supportsAllDrives: true });
+      success = true;
+    } catch (delErr: any) {
+      console.warn(`deleteCandidateFolder permanent delete failed for ${cleanId}:`, delErr?.message);
+    }
+
+    // 2. Move to trash
+    if (!success) {
       try {
-        await drive.files.delete({
+        await drive.files.update({
           fileId: cleanId,
+          requestBody: { trashed: true },
           supportsAllDrives: true,
         });
-      } catch (err: any) {
-        try {
-          await drive.files.update({
-            fileId: cleanId,
-            requestBody: { trashed: true },
-            supportsAllDrives: true,
-          });
-        } catch {
-          console.warn(`Could not delete Drive folder by ID ${cleanId}:`, err?.message || err);
-        }
+        success = true;
+      } catch (trashErr: any) {
+        console.warn(`deleteCandidateFolder trash failed for ${cleanId}:`, trashErr?.message);
+      }
+    }
+
+    // 3. Remove parent
+    if (!success && rootFolderId) {
+      try {
+        await drive.files.update({
+          fileId: cleanId,
+          removeParents: rootFolderId,
+          supportsAllDrives: true,
+        });
+        success = true;
+      } catch (remErr: any) {
+        console.error(`deleteCandidateFolder removeParent failed for ${cleanId}:`, remErr?.message);
       }
     }
 
@@ -192,61 +213,45 @@ export async function deleteCandidateFolder(
         fs.rmSync(fallbackDir, { recursive: true, force: true });
       }
     } catch {}
+
+    return success;
   }
 
-  // 2. Search for any remaining folder in root Drive directory named with candidateId
-  if (candidateId) {
+  // 1. Direct deletion by folderId
+  if (folderId) {
+    await removeFolderById(folderId);
+  }
+
+  // 2. Search root directory for any folders matching candidateId in name
+  if (candidateId && rootFolderId) {
     try {
-      const env = getEnv();
-      const rootFolderId = extractDriveFolderId((env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "").trim());
-      const safeId = candidateId.replace(/[/\\:*?"<>|']/g, "").trim();
-
-      let query = `name contains '${safeId}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
-      if (
-        rootFolderId &&
-        rootFolderId !== "your_google_drive_folder_id_here" &&
-        rootFolderId.length > 5
-      ) {
-        query += ` and '${rootFolderId}' in parents`;
-      }
-
+      const safeId = candidateId.trim().toLowerCase();
       const res = await drive.files.list({
-        q: query,
+        q: `'${rootFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
         fields: "files(id, name)",
+        pageSize: 1000,
         supportsAllDrives: true,
         includeItemsFromAllDrives: true,
       });
 
-      const matching = res.data.files || [];
-      for (const item of matching) {
-        if (item.id) {
-          try {
-            await drive.files.delete({
-              fileId: item.id,
-              supportsAllDrives: true,
-            });
-          } catch {
-            try {
-              await drive.files.update({
-                fileId: item.id,
-                requestBody: { trashed: true },
-                supportsAllDrives: true,
-              });
-            } catch {}
-          }
+      const folders = res.data.files || [];
+      for (const f of folders) {
+        if (f.id && f.name && f.name.toLowerCase().includes(safeId)) {
+          await removeFolderById(f.id);
         }
       }
     } catch (err) {
-      console.warn(`Could not search/delete candidate folders for ${candidateId}:`, err);
+      console.warn(`Could not search candidate folders for ${candidateId}:`, err);
     }
   }
 }
 
 /**
  * Cleans up orphaned candidate folders in Google Drive whose candidates no longer exist in the system.
+ * If activeCandidateIds is empty (or during system reset), ALL candidate folders in the root folder are deleted.
  */
 export async function cleanupOrphanedDriveFolders(
-  activeCandidateIds: string[]
+  activeCandidateIds: string[] = []
 ): Promise<number> {
   try {
     const drive = getDriveClient();
@@ -258,53 +263,101 @@ export async function cleanupOrphanedDriveFolders(
       rootFolderId === "your_google_drive_folder_id_here" ||
       rootFolderId.length <= 5
     ) {
+      console.warn("cleanupOrphanedDriveFolders: rootFolderId not configured:", rootFolderId);
       return 0;
     }
 
+    // List all folders inside the root Drive directory
     const res = await drive.files.list({
       q: `'${rootFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-      fields: "files(id, name)",
-      pageSize: 100,
+      fields: "files(id, name, parents)",
+      pageSize: 1000,
       supportsAllDrives: true,
       includeItemsFromAllDrives: true,
     });
 
-    const activeSet = new Set(activeCandidateIds);
     const folders = res.data.files || [];
+    const activeSet = new Set(
+      activeCandidateIds.map((id) => (id || "").trim().toLowerCase()).filter(Boolean)
+    );
+
     let deletedCount = 0;
 
     for (const folder of folders) {
       if (!folder.id || !folder.name) continue;
-      // Candidate folders are named: [candidateId] - [candidateName]
-      // Or start with CND- / cnd-
-      const match = folder.name.match(/^(cnd-[^\s-]+)/i) || folder.name.split(" - ");
-      const folderCandidateId = match ? (match[1]?.trim() || match[0]?.trim()) : "";
 
-      if (folderCandidateId && folderCandidateId.toLowerCase().startsWith("cnd-")) {
-        if (!activeSet.has(folderCandidateId)) {
+      let shouldDelete = false;
+
+      if (activeSet.size === 0) {
+        // Reset mode: delete every folder inside rootFolderId!
+        shouldDelete = true;
+      } else {
+        const folderNameLower = folder.name.toLowerCase();
+        let matchesActiveCandidate = false;
+
+        for (const activeId of Array.from(activeSet)) {
+          if (folderNameLower.includes(activeId) || folder.id === activeId) {
+            matchesActiveCandidate = true;
+            break;
+          }
+        }
+
+        if (!matchesActiveCandidate) {
+          shouldDelete = true;
+        }
+      }
+
+      if (shouldDelete) {
+        let deleted = false;
+
+        // Attempt 1: Permanent delete
+        try {
+          await drive.files.delete({
+            fileId: folder.id,
+            supportsAllDrives: true,
+          });
+          deleted = true;
+        } catch (delErr: any) {
+          console.warn(`Permanent delete failed for "${folder.name}" (${folder.id}):`, delErr?.message);
+        }
+
+        // Attempt 2: Move to trash
+        if (!deleted) {
           try {
-            await drive.files.delete({
+            await drive.files.update({
               fileId: folder.id,
+              requestBody: { trashed: true },
               supportsAllDrives: true,
             });
-            deletedCount++;
-          } catch {
-            try {
-              await drive.files.update({
-                fileId: folder.id,
-                requestBody: { trashed: true },
-                supportsAllDrives: true,
-              });
-              deletedCount++;
-            } catch {}
+            deleted = true;
+          } catch (trashErr: any) {
+            console.warn(`Move to trash failed for "${folder.name}" (${folder.id}):`, trashErr?.message);
           }
+        }
+
+        // Attempt 3: Remove from root parent folder
+        if (!deleted) {
+          try {
+            await drive.files.update({
+              fileId: folder.id,
+              removeParents: rootFolderId,
+              supportsAllDrives: true,
+            });
+            deleted = true;
+          } catch (remErr: any) {
+            console.error(`Remove parent failed for "${folder.name}" (${folder.id}):`, remErr?.message);
+          }
+        }
+
+        if (deleted) {
+          deletedCount++;
         }
       }
     }
 
     return deletedCount;
-  } catch (err) {
-    console.warn("Cleanup orphaned drive folders error:", err);
+  } catch (err: any) {
+    console.error("Cleanup orphaned drive folders error:", err?.message || err);
     return 0;
   }
 }
