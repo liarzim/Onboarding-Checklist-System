@@ -23,6 +23,7 @@ import {
   User,
   Copy,
   ExternalLink,
+  Trash2,
 } from "lucide-react";
 import { validateIsraeliId } from "@/lib/israeliId";
 import TestingSandboxBar from "@/components/admin/TestingSandboxBar";
@@ -222,25 +223,8 @@ export default function AdminDashboardPage() {
           // In Production: clean up any legacy demo candidates from local storage and do NOT load them!
           localStorage.removeItem("onboarding_demo_candidates");
         } else {
-          // Only in Staging / Local development allow demo candidates fallback
-          if (fetchedCandidates.length > 0) {
-            localStorage.setItem("onboarding_demo_candidates", JSON.stringify(fetchedCandidates));
-          } else {
-            const local = localStorage.getItem("onboarding_demo_candidates");
-            if (local) {
-              try {
-                const parsed = JSON.parse(local);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                  fetchedCandidates = parsed;
-                  fetch("/api/demo/sync", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ candidates: parsed }),
-                  }).catch(() => {});
-                }
-              } catch {}
-            }
-          }
+          // In Staging/Dev: always strictly mirror what the server returned, never resurrect dead candidates!
+          localStorage.setItem("onboarding_demo_candidates", JSON.stringify(fetchedCandidates));
         }
       }
 
@@ -251,6 +235,33 @@ export default function AdminDashboardPage() {
       setError(err instanceof Error ? err.message : "שגיאה בטעינה");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleDeleteCandidate(candidateId: string, candidateName: string) {
+    if (!window.confirm(`האם אתה בטוח שברצונך למחוק את המועמד "${candidateName}" לצמיתות מהמערכת?`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/admin/candidate/${candidateId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || "שגיאה במחיקת המועמד");
+      }
+      if (typeof window !== "undefined") {
+        try {
+          const local = localStorage.getItem("onboarding_demo_candidates");
+          if (local) {
+            const parsed = JSON.parse(local);
+            const filtered = parsed.filter((c: any) => c.candidate_id !== candidateId);
+            localStorage.setItem("onboarding_demo_candidates", JSON.stringify(filtered));
+          }
+        } catch {}
+      }
+      setCandidates((prev) => prev.filter((c) => c.candidate_id !== candidateId));
+      await loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "שגיאה במחיקת המועמד");
     }
   }
 
@@ -598,13 +609,23 @@ export default function AdminDashboardPage() {
                       {new Date(candidate.updated_at).toLocaleDateString("he-IL")}
                     </td>
                     <td className="py-4 px-6 text-left" onClick={(e) => e.stopPropagation()}>
-                      <Link
-                        href={`/admin/candidate/${candidate.candidate_id}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium text-xs transition"
-                      >
-                        <span>צפייה בצ&apos;ק-ליסט</span>
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                      </Link>
+                      <div className="flex items-center gap-2 justify-end">
+                        <Link
+                          href={`/admin/candidate/${candidate.candidate_id}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium text-xs transition"
+                        >
+                          <span>צפייה בצ&apos;ק-ליסט</span>
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCandidate(candidate.candidate_id, candidate.full_name)}
+                          title="מחיקת מועמד לצמיתות"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

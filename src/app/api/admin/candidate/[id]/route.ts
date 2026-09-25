@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { getAdminSession } from "@/lib/auth";
 import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
 import { createCandidateFolder } from "@/lib/drive";
@@ -120,10 +121,34 @@ export async function DELETE(
     const candidateId = params.id;
     await sheetsRepository.deleteCandidate(candidateId);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: "המועמד נמחק בהצלחה",
     });
+
+    // Remove candidate from demo_candidates cookie
+    try {
+      const cookieStore = cookies();
+      const rawCookie = cookieStore.get("demo_candidates")?.value;
+      if (rawCookie) {
+        const decoded = decodeURIComponent(rawCookie);
+        const parsed = JSON.parse(decoded);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((c: any) => c.candidate_id !== candidateId);
+          if (filtered.length > 0) {
+            response.cookies.set("demo_candidates", encodeURIComponent(JSON.stringify(filtered)), {
+              path: "/",
+              maxAge: 7 * 24 * 60 * 60,
+              sameSite: "lax",
+            });
+          } else {
+            response.cookies.delete("demo_candidates");
+          }
+        }
+      }
+    } catch {}
+
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "שגיאה במחיקת המועמד";
     return NextResponse.json({ error: "Server Error", message }, { status: 500 });
