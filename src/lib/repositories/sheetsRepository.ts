@@ -113,8 +113,19 @@ export class SheetsRepository {
         },
       });
       return true;
-    } catch (err) {
-      console.warn("Could not append candidate to Google Sheet:", err);
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      console.error("Could not append candidate to Google Sheet:", err);
+
+      const env = getEnv();
+      const isConfigured = Boolean(
+        (env.GOOGLE_PRIVATE_KEY && env.GOOGLE_PRIVATE_KEY.length > 50) ||
+        (env.GOOGLE_SPREADSHEET_ID && env.GOOGLE_SPREADSHEET_ID !== "your_google_spreadsheet_id_here")
+      );
+
+      if (isConfigured) {
+        throw new Error(`שגיאה בשמירת המועמד ב-Google Sheets: ${errMsg}`);
+      }
       return false;
     }
   }

@@ -46,9 +46,21 @@ export async function createCandidateFolder(
     }
 
     return folderId;
-  } catch (error) {
-    // If Google Drive API is not configured or offline during testing, fallback to mock folder ID
-    console.warn(`Drive folder creation offline fallback for "${folderName}":`, error);
+  } catch (error: any) {
+    const errorMsg = error?.message || String(error);
+    console.error(`Drive folder creation error for "${folderName}":`, error);
+
+    const env = getEnv();
+    const isConfigured = Boolean(
+      (env.GOOGLE_PRIVATE_KEY && env.GOOGLE_PRIVATE_KEY.length > 50) ||
+      (env.GOOGLE_DRIVE_ROOT_FOLDER_ID && env.GOOGLE_DRIVE_ROOT_FOLDER_ID !== "your_google_drive_folder_id_here")
+    );
+
+    // If Google Drive is configured (like in Staging/Production on Vercel), do NOT swallow the error!
+    if (isConfigured) {
+      throw new Error(`שגיאה ביצירת תיקיית Drive עבור המועמד: ${errorMsg}`);
+    }
+
     return `test_drive_folder_${safeId}`;
   }
 }
