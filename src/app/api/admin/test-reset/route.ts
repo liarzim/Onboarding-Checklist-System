@@ -3,6 +3,7 @@ import { resetTestStoreToStateZero } from "@/lib/testStore";
 import { getSheetsClient } from "@/lib/google";
 import { getEnv, isProduction } from "@/lib/env";
 import { SHEET_NAMES } from "@/lib/repositories/sheetsRepository";
+import { cleanupOrphanedDriveFolders } from "@/lib/drive";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,9 @@ export async function POST(request: Request) {
               range: `${SHEET_NAMES.AUDIT_LOGS}!A2:G`,
             }),
           ]);
+
+          // Also clean up candidate folders from Google Drive root directory
+          await cleanupOrphanedDriveFolders([]);
         }
       } catch (sheetErr) {
         console.warn("Could not clear sheets on reset:", sheetErr);

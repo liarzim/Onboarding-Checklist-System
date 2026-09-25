@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getAdminSession } from "@/lib/auth";
 import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
-import { createCandidateFolder } from "@/lib/drive";
+import { createCandidateFolder, deleteCandidateFolder, cleanupOrphanedDriveFolders } from "@/lib/drive";
 
 export const dynamic = "force-dynamic";
 
@@ -119,11 +119,26 @@ export async function DELETE(
     }
 
     const candidateId = params.id;
+    // 1. Retrieve candidate to get their folder ID before removing
+    const candidate = await sheetsRepository.getCandidateById(candidateId);
+    const folderId = candidate?.drive_folder_id;
+
+    // 2. Delete candidate from Sheets and local store
     await sheetsRepository.deleteCandidate(candidateId);
+
+    // 3. Delete candidate folder from Google Drive
+    await deleteCandidateFolder(folderId, candidateId);
+
+    // 4. Background cleanup of any other orphaned candidate folders
+    try {
+      const remainingCandidates = await sheetsRepository.getCandidates();
+      const activeIds = remainingCandidates.map((c) => c.candidate_id);
+      cleanupOrphanedDriveFolders(activeIds).catch(() => {});
+    } catch {}
 
     const response = NextResponse.json({
       success: true,
-      message: "המועמד נמחק בהצלחה",
+      message: "המועמד ותיקיית ה-Drive שלו נמחקו בהצלחה",
     });
 
     // Remove candidate from demo_candidates cookie

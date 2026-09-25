@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getAdminSession } from "@/lib/auth";
 import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
 import { setDemoCandidateCookie } from "@/lib/testStore";
-import { createCandidateFolder } from "@/lib/drive";
+import { createCandidateFolder, cleanupOrphanedDriveFolders } from "@/lib/drive";
 import { validateIsraeliId } from "@/lib/israeliId";
 import type { Candidate, AuditLogEntry } from "@/types/schema";
 
@@ -56,6 +56,9 @@ export async function GET(request: Request) {
       sheetsRepository.getVendors(),
       sheetsRepository.getSettingStages(),
     ]);
+
+    // Trigger non-blocking cleanup of any orphaned Drive folders for deleted candidates
+    cleanupOrphanedDriveFolders(allCandidates.map((c) => c.candidate_id)).catch(() => {});
 
     // Create lookup maps
     const vendorMap = new Map(vendors.map((v) => [v.vendor_id, v.company_name]));

@@ -1,4 +1,7 @@
 import { Readable } from "stream";
+import fs from "fs";
+import path from "path";
+import os from "os";
 import { getDriveClient } from "./google";
 import { getEnv } from "./env";
 import { saveLocalTestUpload } from "./testStore";
@@ -144,5 +147,164 @@ export async function uploadFileToCandidateFolder(
     // If Google Drive API is not configured or offline during testing, save locally in test store
     console.warn(`Drive upload offline fallback for "${fileName}":`, error);
     return saveLocalTestUpload(folderId, fileName, fileBuffer);
+  }
+}
+
+/**
+ * Deletes a candidate's Google Drive folder by folderId and/or candidateId.
+ */
+export async function deleteCandidateFolder(
+  folderId?: string | null,
+  candidateId?: string | null
+): Promise<void> {
+  const drive = getDriveClient();
+
+  // 1. Direct deletion if folderId is provided
+  if (folderId) {
+    const cleanId = extractDriveFolderId(folderId).trim();
+    if (cleanId && !cleanId.startsWith("test_drive_folder_")) {
+      try {
+        await drive.files.delete({
+          fileId: cleanId,
+          supportsAllDrives: true,
+        });
+      } catch (err: any) {
+        try {
+          await drive.files.update({
+            fileId: cleanId,
+            requestBody: { trashed: true },
+            supportsAllDrives: true,
+          });
+        } catch {
+          console.warn(`Could not delete Drive folder by ID ${cleanId}:`, err?.message || err);
+        }
+      }
+    }
+
+    // Clean local fallback uploads if any
+    try {
+      const primaryDir = path.join(process.cwd(), "data", "test-uploads", cleanId);
+      if (fs.existsSync(primaryDir)) {
+        fs.rmSync(primaryDir, { recursive: true, force: true });
+      }
+      const fallbackDir = path.join(os.tmpdir(), "onboarding-test-uploads", cleanId);
+      if (fs.existsSync(fallbackDir)) {
+        fs.rmSync(fallbackDir, { recursive: true, force: true });
+      }
+    } catch {}
+  }
+
+  // 2. Search for any remaining folder in root Drive directory named with candidateId
+  if (candidateId) {
+    try {
+      const env = getEnv();
+      const rootFolderId = extractDriveFolderId((env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "").trim());
+      const safeId = candidateId.replace(/[/\\:*?"<>|']/g, "").trim();
+
+      let query = `name contains '${safeId}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+      if (
+        rootFolderId &&
+        rootFolderId !== "your_google_drive_folder_id_here" &&
+        rootFolderId.length > 5
+      ) {
+        query += ` and '${rootFolderId}' in parents`;
+      }
+
+      const res = await drive.files.list({
+        q: query,
+        fields: "files(id, name)",
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+
+      const matching = res.data.files || [];
+      for (const item of matching) {
+        if (item.id) {
+          try {
+            await drive.files.delete({
+              fileId: item.id,
+              supportsAllDrives: true,
+            });
+          } catch {
+            try {
+              await drive.files.update({
+                fileId: item.id,
+                requestBody: { trashed: true },
+                supportsAllDrives: true,
+              });
+            } catch {}
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`Could not search/delete candidate folders for ${candidateId}:`, err);
+    }
+  }
+}
+
+/**
+ * Cleans up orphaned candidate folders in Google Drive whose candidates no longer exist in the system.
+ */
+export async function cleanupOrphanedDriveFolders(
+  activeCandidateIds: string[]
+): Promise<number> {
+  try {
+    const drive = getDriveClient();
+    const env = getEnv();
+    const rootFolderId = extractDriveFolderId((env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "").trim());
+
+    if (
+      !rootFolderId ||
+      rootFolderId === "your_google_drive_folder_id_here" ||
+      rootFolderId.length <= 5
+    ) {
+      return 0;
+    }
+
+    const res = await drive.files.list({
+      q: `'${rootFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+      fields: "files(id, name)",
+      pageSize: 100,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
+
+    const activeSet = new Set(activeCandidateIds);
+    const folders = res.data.files || [];
+    let deletedCount = 0;
+
+    for (const folder of folders) {
+      if (!folder.id || !folder.name) continue;
+      // Candidate folders are named: [candidateId] - [candidateName]
+      // Or start with CND- / cnd-
+      const match = folder.name.match(/^(cnd-[^\s-]+)/i) || folder.name.split(" - ");
+      const folderCandidateId = match ? (match[1]?.trim() || match[0]?.trim()) : "";
+
+      if (folderCandidateId && folderCandidateId.toLowerCase().startsWith("cnd-")) {
+        if (!activeSet.has(folderCandidateId)) {
+          try {
+            await drive.files.delete({
+              fileId: folder.id,
+              supportsAllDrives: true,
+            });
+            deletedCount++;
+          } catch {
+            try {
+              await drive.files.update({
+                fileId: folder.id,
+                requestBody: { trashed: true },
+                supportsAllDrives: true,
+              });
+              deletedCount++;
+            } catch {}
+          }
+        }
+      }
+    }
+
+    return deletedCount;
+  } catch (err) {
+    console.warn("Cleanup orphaned drive folders error:", err);
+    return 0;
   }
 }
