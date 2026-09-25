@@ -2,6 +2,7 @@ import { Readable } from "stream";
 import { getDriveClient } from "./google";
 import { getEnv } from "./env";
 import { saveLocalTestUpload } from "./testStore";
+import { extractDriveFolderId } from "./dynamicConfig";
 
 /**
  * Creates a dedicated candidate folder under the root onboarding Drive folder.
@@ -25,7 +26,7 @@ export async function createCandidateFolder(
       mimeType: "application/vnd.google-apps.folder",
     };
 
-    const rootFolderId = (env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "").trim();
+    const rootFolderId = extractDriveFolderId((env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "").trim());
     if (
       rootFolderId &&
       rootFolderId !== "your_google_drive_folder_id_here" &&
@@ -79,7 +80,7 @@ export async function uploadFileToCandidateFolder(
     const drive = getDriveClient();
     // 1. Check for existing file with the identical name in the folder
     // Robustly sanitize search parameters against Drive search query injection
-    const sanitizedFolderId = folderId.replace(/['\\]/g, "");
+    const sanitizedFolderId = extractDriveFolderId(folderId).replace(/['\\]/g, "");
     const sanitizedFileName = fileName.replace(/['\\]/g, "");
 
     const searchResponse = await drive.files.list({

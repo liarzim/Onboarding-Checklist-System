@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { getDynamicGoogleConfig } from "./dynamicConfig";
+import {
+  getDynamicGoogleConfig,
+  extractSpreadsheetId,
+  extractDriveFolderId,
+} from "./dynamicConfig";
 
 export const envSchema = z.object({
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z
@@ -34,30 +38,12 @@ export const envSchema = z.object({
     .string()
     .optional()
     .default("")
-    .transform((val) => {
-      let cleaned = (val || "").trim();
-      if (
-        (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
-        (cleaned.startsWith("'") && cleaned.endsWith("'"))
-      ) {
-        cleaned = cleaned.slice(1, -1).trim();
-      }
-      return cleaned.replace(/['"]/g, "");
-    }),
+    .transform((val) => extractSpreadsheetId(val)),
   GOOGLE_DRIVE_ROOT_FOLDER_ID: z
     .string()
     .optional()
     .default("")
-    .transform((val) => {
-      let cleaned = (val || "").trim();
-      if (
-        (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
-        (cleaned.startsWith("'") && cleaned.endsWith("'"))
-      ) {
-        cleaned = cleaned.slice(1, -1).trim();
-      }
-      return cleaned.replace(/['"]/g, "");
-    }),
+    .transform((val) => extractDriveFolderId(val)),
   JWT_SECRET: z
     .string()
     .optional()
