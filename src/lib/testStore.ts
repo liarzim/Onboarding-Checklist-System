@@ -7,6 +7,7 @@ export interface TestStorageData {
   candidates: Candidate[];
   checklistItems: ChecklistItem[];
   auditLogs: AuditLogEntry[];
+  deletedCandidateIds?: string[];
 }
 
 declare global {
@@ -35,6 +36,7 @@ export function getInitialTestStorage(): TestStorageData {
     candidates: [],
     checklistItems: [],
     auditLogs: [],
+    deletedCandidateIds: [],
   };
 }
 
@@ -119,13 +121,22 @@ export function loadTestStore(): TestStorageData {
     if (!store) {
       store = getInitialTestStorage();
     }
+    if (!store.deletedCandidateIds) {
+      store.deletedCandidateIds = [];
+    }
     global.__testStoreMemoryStorage = store;
   }
 
-  // 3. Always merge with any candidates passed in the browser demo_candidates cookie
+  // 3. Always merge with any candidates passed in the browser demo_candidates cookie,
+  // BUT strictly reject any candidate that was deleted!
   const cookieCandidates = getDemoCookieCandidates();
+  const deletedSet = new Set(store.deletedCandidateIds || []);
+
   if (cookieCandidates.length > 0) {
     for (const cc of cookieCandidates) {
+      if (deletedSet.has(cc.candidate_id)) {
+        continue; // NEVER revive deleted candidate from cookie!
+      }
       const idx = store.candidates.findIndex((c) => c.candidate_id === cc.candidate_id);
       if (idx >= 0) {
         store.candidates[idx] = {
@@ -138,7 +149,25 @@ export function loadTestStore(): TestStorageData {
     }
   }
 
+  // Extra safety: make sure no deleted candidates remain in store.candidates
+  if (deletedSet.size > 0) {
+    store.candidates = store.candidates.filter((c) => !deletedSet.has(c.candidate_id));
+  }
+
   return store;
+}
+
+export function recordDeletedCandidate(candidateId: string): void {
+  const store = loadTestStore();
+  if (!store.deletedCandidateIds) {
+    store.deletedCandidateIds = [];
+  }
+  if (!store.deletedCandidateIds.includes(candidateId)) {
+    store.deletedCandidateIds.push(candidateId);
+  }
+  store.candidates = store.candidates.filter((c) => c.candidate_id !== candidateId);
+  store.checklistItems = store.checklistItems.filter((i) => !i.checklist_item_id.startsWith(candidateId));
+  saveTestStore(store);
 }
 
 export function saveTestStore(data: TestStorageData): void {

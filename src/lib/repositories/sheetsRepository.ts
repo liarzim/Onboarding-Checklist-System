@@ -1,6 +1,6 @@
 import { getSheetsClient } from "../google";
 import { getEnv, isProduction } from "../env";
-import { loadTestStore, saveTestStore } from "../testStore";
+import { loadTestStore, saveTestStore, recordDeletedCandidate } from "../testStore";
 import type {
   Candidate,
   ChecklistItem,
@@ -173,32 +173,39 @@ export class SheetsRepository {
       // Ignore Google Sheets fetch error and merge with testStore
     }
 
-    // In Production: NEVER merge local test store or demo cookies. Only return real data from Google Sheets!
-    const allCandidates = [...sheetCandidates];
-    if (!isProduction()) {
-      const testStore = loadTestStore();
-      const sheetIds = new Set(sheetCandidates.map((c) => c.candidate_id));
-
-      for (const testCand of testStore.candidates) {
-        if (!sheetIds.has(testCand.candidate_id)) {
-          allCandidates.unshift(testCand);
-          // Auto-sync: if Google Sheets is connected in staging/dev, write this local candidate to Google Sheets
-          if (isSheetsConnected) {
-            this.appendCandidateToSheet(testCand).catch(() => {});
-          }
+    // When Google Sheets is connected: Google Sheets is the single source of truth!
+    // NEVER merge testStore or client cookies into Google Sheets candidates list,
+    // and NEVER auto-append dead candidates from client cookies back to Google Sheets!
+    if (isSheetsConnected) {
+      return sheetCandidates.filter((c) => {
+        if (filter?.vendor_id !== undefined && c.vendor_id !== filter.vendor_id) {
+          return false;
         }
-      }
+        if (filter?.is_completed !== undefined && c.is_completed !== filter.is_completed) {
+          return false;
+        }
+        return true;
+      });
     }
 
-    return allCandidates.filter((c) => {
-      if (filter?.vendor_id !== undefined && c.vendor_id !== filter.vendor_id) {
-        return false;
-      }
-      if (filter?.is_completed !== undefined && c.is_completed !== filter.is_completed) {
-        return false;
-      }
-      return true;
-    });
+    // Google Sheets is NOT connected (offline / local development without Google credentials):
+    if (!isProduction()) {
+      const testStore = loadTestStore();
+      const deletedSet = new Set(testStore.deletedCandidateIds || []);
+      return testStore.candidates
+        .filter((c) => !deletedSet.has(c.candidate_id))
+        .filter((c) => {
+          if (filter?.vendor_id !== undefined && c.vendor_id !== filter.vendor_id) {
+            return false;
+          }
+          if (filter?.is_completed !== undefined && c.is_completed !== filter.is_completed) {
+            return false;
+          }
+          return true;
+        });
+    }
+
+    return [];
   }
 
   /**
@@ -207,17 +214,7 @@ export class SheetsRepository {
   async getCandidateById(candidate_id: string): Promise<Candidate | null> {
     if (!candidate_id) return null;
     const candidates = await this.getCandidates();
-    const found = candidates.find((c) => c.candidate_id === candidate_id);
-    if (found) return found;
-
-    // Direct fallback to testStore only in non-production
-    if (!isProduction()) {
-      const testStore = loadTestStore();
-      const testCand = testStore.candidates.find((c) => c.candidate_id === candidate_id);
-      if (testCand) return testCand;
-    }
-
-    return null;
+    return candidates.find((c) => c.candidate_id === candidate_id) || null;
   }
 
   /**
@@ -226,33 +223,19 @@ export class SheetsRepository {
   async getCandidateByToken(token: string): Promise<Candidate | null> {
     if (!token) return null;
     const candidates = await this.getCandidates();
-    const found = candidates.find(
-      (c) => c.access_token === token || c.candidate_id === token
+    return (
+      candidates.find(
+        (c) => c.access_token === token || c.candidate_id === token
+      ) || null
     );
-    if (found) return found;
-
-    // Direct fallback to testStore only in non-production
-    if (!isProduction()) {
-      const testStore = loadTestStore();
-      return (
-        testStore.candidates.find(
-          (c) => c.access_token === token || c.candidate_id === token
-        ) || null
-      );
-    }
-
-    return null;
   }
 
   /**
    * Deletes a candidate from Candidates sheet and testStore.
    */
   async deleteCandidate(candidate_id: string): Promise<void> {
-    // 1. Delete from local testStore
-    const testStore = loadTestStore();
-    testStore.candidates = testStore.candidates.filter((c) => c.candidate_id !== candidate_id);
-    testStore.checklistItems = testStore.checklistItems.filter((i) => !i.checklist_item_id.startsWith(candidate_id));
-    saveTestStore(testStore);
+    // 1. Delete from local testStore and blacklist permanently
+    recordDeletedCandidate(candidate_id);
 
     // 2. Delete from Google Sheets if connected
     try {

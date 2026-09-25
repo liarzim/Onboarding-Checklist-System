@@ -93,13 +93,39 @@ export async function GET(request: Request) {
       })
     );
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       candidates: candidatesWithDetails,
       meta: {
         total: candidatesWithDetails.length,
         status,
       },
     });
+
+    // Clean up stale demo_candidates cookie from browser
+    try {
+      const { cookies } = await import("next/headers");
+      const cookieStore = cookies();
+      const rawCookie = cookieStore.get("demo_candidates")?.value;
+      if (rawCookie) {
+        const decoded = decodeURIComponent(rawCookie);
+        const parsed = JSON.parse(decoded);
+        if (Array.isArray(parsed)) {
+          const currentValidIds = new Set(allCandidates.map((c) => c.candidate_id));
+          const cleaned = parsed.filter((c: any) => currentValidIds.has(c.candidate_id));
+          if (cleaned.length > 0 && cleaned.length !== parsed.length) {
+            response.cookies.set("demo_candidates", encodeURIComponent(JSON.stringify(cleaned)), {
+              path: "/",
+              maxAge: 7 * 24 * 60 * 60,
+              sameSite: "lax",
+            });
+          } else if (cleaned.length === 0) {
+            response.cookies.delete("demo_candidates");
+          }
+        }
+      }
+    } catch {}
+
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "שגיאה בטעינת רשימת המועמדים";
     return NextResponse.json({ error: "Server Error", message }, { status: 500 });

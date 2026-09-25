@@ -69,26 +69,7 @@ export default function CandidateChecklistPage() {
     try {
       setLoading(true);
       setError(null);
-      let res = await fetch(`/api/vendor/candidates/${candidateId}`);
-      if (!res.ok && res.status === 404 && typeof window !== "undefined") {
-        const local = localStorage.getItem("onboarding_demo_candidates");
-        if (local) {
-          try {
-            const parsed = JSON.parse(local);
-            const found = Array.isArray(parsed)
-              ? parsed.find((c: any) => c.candidate_id === candidateId)
-              : null;
-            if (found) {
-              await fetch("/api/demo/sync", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ candidates: parsed }),
-              });
-              res = await fetch(`/api/vendor/candidates/${candidateId}`);
-            }
-          } catch {}
-        }
-      }
+      const res = await fetch(`/api/vendor/candidates/${candidateId}`);
 
       if (!res.ok) {
         const errorData = await res.json();

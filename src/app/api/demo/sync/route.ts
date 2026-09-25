@@ -15,16 +15,15 @@ export async function POST(request: Request) {
     }
 
     const testStore = loadTestStore();
+    const deletedSet = new Set(testStore.deletedCandidateIds || []);
     for (const cand of candidates) {
-      if (!cand.candidate_id) continue;
+      if (!cand.candidate_id || deletedSet.has(cand.candidate_id)) continue;
       const idx = testStore.candidates.findIndex((c) => c.candidate_id === cand.candidate_id);
       if (idx >= 0) {
         testStore.candidates[idx] = { ...testStore.candidates[idx], ...cand };
       } else {
         testStore.candidates.unshift(cand);
       }
-      // Also write to Google Sheets if connected
-      sheetsRepository.appendCandidateToSheet(cand).catch(() => {});
     }
     saveTestStore(testStore);
 
