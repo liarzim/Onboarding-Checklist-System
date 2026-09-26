@@ -15,6 +15,10 @@ import {
   FileText,
   ShieldCheck,
   Check,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  RotateCcw,
 } from "lucide-react";
 import SignaturePad from "./SignaturePad";
 import { generatePdfFromElement } from "@/lib/forms/pdfGenerator";
@@ -101,6 +105,92 @@ export default function DigitalFormView({
 
   // Flow State: false = Dedicated Input Screen, true = A4 PDF Preview & Approval Screen
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+
+  // Zoom & Pan Preview State
+  const [zoom, setZoom] = useState(1);
+  const [isPinching, setIsPinching] = useState(false);
+  const [contentHeight, setContentHeight] = useState(1123);
+  const touchStartDistRef = useRef<number | null>(null);
+  const touchStartZoomRef = useRef<number>(1);
+
+  // Calculate fit to screen scale based on available container/screen width
+  function getFitZoom(): number {
+    if (typeof window === "undefined") return 1;
+    const padding = 32;
+    const availableWidth = window.innerWidth - padding;
+    return Number(Math.min(1, Math.max(0.35, availableWidth / 794)).toFixed(2));
+  }
+
+  // Auto-fit to screen when entering preview mode or on window resize
+  useEffect(() => {
+    if (isPreviewMode && typeof window !== "undefined") {
+      setZoom(getFitZoom());
+
+      const handleResize = () => {
+        if (window.innerWidth < 820) {
+          setZoom(getFitZoom());
+        }
+      };
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, [isPreviewMode]);
+
+  // Track printable container height for accurate bounding box sizing during zoom
+  useEffect(() => {
+    if (printRef.current && isPreviewMode) {
+      const updateHeight = () => {
+        if (printRef.current) {
+          setContentHeight(printRef.current.offsetHeight || 1123);
+        }
+      };
+      updateHeight();
+      const observer = new ResizeObserver(updateHeight);
+      observer.observe(printRef.current);
+      return () => observer.disconnect();
+    }
+  }, [isPreviewMode, docTypeId]);
+
+  // Pinch-to-zoom multi-touch gesture handlers
+  function handleTouchStart(e: React.TouchEvent) {
+    if (e.touches.length === 2) {
+      setIsPinching(true);
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      touchStartDistRef.current = dist;
+      touchStartZoomRef.current = zoom;
+    }
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    if (e.touches.length === 2 && touchStartDistRef.current !== null) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const factor = dist / touchStartDistRef.current;
+      const newZoom = Math.min(2.5, Math.max(0.35, touchStartZoomRef.current * factor));
+      setZoom(Number(newZoom.toFixed(2)));
+    }
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    if (e.touches.length < 2) {
+      setIsPinching(false);
+      touchStartDistRef.current = null;
+    }
+  }
+
+  // Mouse wheel zoom with Ctrl key or trackpad pinch
+  function handleWheel(e: React.WheelEvent) {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.08 : -0.08;
+      setZoom((prev) => Math.min(2.5, Math.max(0.35, Number((prev + delta).toFixed(2)))));
+    }
+  }
 
   // Form State
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
@@ -471,10 +561,17 @@ export default function DigitalFormView({
         // Ignore
       }
 
+      // Ensure element is captured at 100% scale for crystal-clear vector A4 PDF
+      const currentZoom = zoom;
+      setZoom(1);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+
       // Generate standard A4 PDF file (21cm x 29.7cm)
       const cleanId = candidate.id_number ? `.${candidate.id_number}` : "";
       const targetFileName = `${docInfo.name || meta.title}.${candidate.full_name}${cleanId}.pdf`;
       const pdfFile = await generatePdfFromElement(printRef.current, targetFileName);
+
+      setZoom(currentZoom);
 
       // Upload to Google Drive and register in database
       const formData = new FormData();
@@ -836,16 +933,101 @@ export default function DigitalFormView({
             </div>
           </div>
 
-          {/* Document Preview Framing Container */}
-          <div className="bg-slate-200/80 p-3 sm:p-8 rounded-3xl overflow-x-auto shadow-inner flex justify-center">
-            {/* The printable A4 element captured by html2canvas */}
+          {/* Interactive Zoom Toolbar */}
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-700">תקריב (Zoom):</span>
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setZoom((prev) => Math.max(0.35, Number((prev - 0.15).toFixed(2))))}
+                    title="הקטן תצוגה (-)"
+                    className="p-1.5 rounded-lg bg-white hover:bg-slate-200 text-slate-700 font-bold transition shadow-xs"
+                  >
+                    <ZoomOut className="w-4 h-4" />
+                  </button>
+
+                  <span className="font-mono font-bold text-slate-800 px-2 min-w-[50px] text-center">
+                    {Math.round(zoom * 100)}%
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setZoom((prev) => Math.min(2.5, Number((prev + 0.15).toFixed(2))))}
+                    title="הגדל תצוגה (+)"
+                    className="p-1.5 rounded-lg bg-white hover:bg-slate-200 text-slate-700 font-bold transition shadow-xs"
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setZoom(getFitZoom())}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold transition border border-blue-200"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>התאם למסך</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setZoom(1)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>100% (גודל מקורי)</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-slate-500 text-right">
+              💡 טיפ: במסך מגע ניתן לקרב ולהרחיק עם 2 אצבעות (Pinch-to-zoom). במחשב ניתן להחזיק Ctrl ולגלול בעכבר.
+            </div>
+          </div>
+
+          {/* Document Preview Framing Container with Touch Gestures and Scaling */}
+          <div
+            className="bg-slate-200/90 p-2 sm:p-6 rounded-3xl overflow-auto shadow-inner flex justify-center touch-pan-x touch-pan-y"
+            style={{ minHeight: "450px" }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onWheel={handleWheel}
+          >
+            {/* Scaled bounding box keeping layout in sync with current zoom */}
             <div
-              ref={printRef}
-              data-single-page={docTypeId === "doc_1" || docTypeId === "doc_3" || docTypeId === "doc_4" ? "true" : undefined}
-              style={{ width: "794px", minWidth: "794px" }}
-              className="bg-white text-slate-900 shadow-2xl border border-slate-300 p-6 sm:p-8 space-y-4"
-              dir="rtl"
+              style={{
+                width: `${Math.round(794 * zoom)}px`,
+                minHeight: `${Math.round(contentHeight * zoom)}px`,
+                position: "relative",
+                transition: isPinching ? "none" : "width 0.15s ease-out, min-height 0.15s ease-out",
+              }}
+              className="flex-shrink-0"
             >
+              {/* Scaled viewport container */}
+              <div
+                style={{
+                  transform: `scale(${zoom})`,
+                  transformOrigin: "top right",
+                  width: "794px",
+                  position: "absolute",
+                  top: 0,
+                  right: 0,
+                  transition: isPinching ? "none" : "transform 0.15s ease-out",
+                }}
+              >
+                {/* The printable A4 element captured by html2canvas */}
+                <div
+                  ref={printRef}
+                  data-single-page={docTypeId === "doc_1" || docTypeId === "doc_3" || docTypeId === "doc_4" ? "true" : undefined}
+                  style={{ width: "794px", minWidth: "794px" }}
+                  className="bg-white text-slate-900 shadow-2xl border border-slate-300 p-6 sm:p-8 space-y-4"
+                  dir="rtl"
+                >
               {/* Header with Logos for doc_2 through doc_9 */}
               {docTypeId !== "doc_1" && (
                 <div className="pdf-section border-b-2 border-slate-900 pb-4 space-y-3" data-pdf-section="header">
@@ -1018,6 +1200,8 @@ export default function DigitalFormView({
                   </div>
                 </div>
               )}
+                </div>
+              </div>
             </div>
           </div>
 
