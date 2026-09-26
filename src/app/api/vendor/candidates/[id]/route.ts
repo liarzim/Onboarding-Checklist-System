@@ -39,6 +39,7 @@ export async function GET(
         file_drive_id: item?.file_drive_id || null,
         file_drive_url: item?.file_drive_url || null,
         updated_at: item?.updated_at || candidate.created_at,
+        form_data: item?.form_data || null,
       };
     });
 

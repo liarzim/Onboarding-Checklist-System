@@ -662,8 +662,21 @@ export class SheetsRepository {
     const testStore = loadTestStore();
     const testItems = testStore.checklistItems.filter((item) => item.candidate_id === candidate_id);
 
-    // Merge sheet items and test items
-    const merged = [...sheetItems];
+    // Merge sheet items and test items, preserving form_data from testStore if sheet item has null
+    const merged = sheetItems.map((sItem) => {
+      const match = testItems.find((t) => t.doc_type_id === sItem.doc_type_id);
+      if (match) {
+        return {
+          ...sItem,
+          form_data: sItem.form_data || match.form_data || null,
+          file_name: sItem.file_name || match.file_name || null,
+          file_drive_id: sItem.file_drive_id || match.file_drive_id || null,
+          file_drive_url: sItem.file_drive_url || match.file_drive_url || null,
+        };
+      }
+      return sItem;
+    });
+
     const sheetDocTypeIds = new Set(sheetItems.map((i) => i.doc_type_id));
     for (const tItem of testItems) {
       if (!sheetDocTypeIds.has(tItem.doc_type_id)) {

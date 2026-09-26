@@ -40,6 +40,7 @@ interface DigitalFormViewProps {
   nextDocTypeId?: string | null;
   onNavigateNext?: () => void;
   token?: string;
+  initialFormData?: any;
 }
 
 export default function DigitalFormView({
@@ -50,6 +51,7 @@ export default function DigitalFormView({
   nextDocTypeId = null,
   onNavigateNext,
   token,
+  initialFormData,
 }: DigitalFormViewProps) {
   const router = useRouter();
   const printRef = useRef<HTMLDivElement | null>(null);
@@ -138,46 +140,124 @@ export default function DigitalFormView({
 
     function applySavedData(data: any) {
       if (!data || typeof data !== "object") return;
-      if (data.q1BirthDate !== undefined) setQ1BirthDate(data.q1BirthDate || "");
-      if (data.q1BirthCountry !== undefined) setQ1BirthCountry(data.q1BirthCountry || "ישראל");
-      if (data.q1AliyahYear !== undefined) setQ1AliyahYear(data.q1AliyahYear || "");
-      if (data.q1MaritalStatus !== undefined) setQ1MaritalStatus(data.q1MaritalStatus || "רווק/ה");
-      if (data.q1OtherCitizenship !== undefined) setQ1OtherCitizenship(data.q1OtherCitizenship || "אין");
-      if (data.q1Address !== undefined) setQ1Address(data.q1Address || "");
-      if (data.q1ArmyService !== undefined) setQ1ArmyService(data.q1ArmyService || 'שירות מלא בצה"ל');
-      if (data.q1MilitaryId !== undefined) setQ1MilitaryId(data.q1MilitaryId || "");
-      if (data.q1MilitaryRole !== undefined) setQ1MilitaryRole(data.q1MilitaryRole || "");
-      if (data.q1MilitaryYears !== undefined) setQ1MilitaryYears(data.q1MilitaryYears || "");
-      if (data.q1ExemptionReason !== undefined) setQ1ExemptionReason(data.q1ExemptionReason || "");
-      if (data.q1EducationHigh !== undefined) setQ1EducationHigh(data.q1EducationHigh || "");
-      if (data.q1EducationAcademic !== undefined) setQ1EducationAcademic(data.q1EducationAcademic || "");
-      if (data.q1Workplace1 !== undefined) setQ1Workplace1(data.q1Workplace1 || "");
-      if (data.q1Workplace2 !== undefined) setQ1Workplace2(data.q1Workplace2 || "");
-      if (data.q1Ref1 !== undefined) setQ1Ref1(data.q1Ref1 || "");
-      if (data.q1Ref2 !== undefined) setQ1Ref2(data.q1Ref2 || "");
+      let hasAny = false;
 
-      if (data.q4FatherName !== undefined) setQ4FatherName(data.q4FatherName || "");
-      if (data.q4Address !== undefined) setQ4Address(data.q4Address || "");
+      // Personal details (doc_1)
+      const birthDate = data.q1BirthDate || data.birth_date || data.birthDate;
+      if (birthDate) { setQ1BirthDate(birthDate); hasAny = true; }
 
-      if (data.q9NameEn !== undefined) setQ9NameEn(data.q9NameEn || "");
-      if (data.q9RoleInProject !== undefined) setQ9RoleInProject(data.q9RoleInProject || "");
-      if (data.q9ManagerName !== undefined) setQ9ManagerName(data.q9ManagerName || "");
-      if (data.q9StartDate !== undefined) setQ9StartDate(data.q9StartDate || todayStr);
-      if (data.q9PreviousGov !== undefined) setQ9PreviousGov(data.q9PreviousGov || "לא");
-      if (data.q9PreviousDates !== undefined) setQ9PreviousDates(data.q9PreviousDates || "");
+      const birthCountry = data.q1BirthCountry || data.birth_country || data.birthCountry;
+      if (birthCountry) { setQ1BirthCountry(birthCountry); hasAny = true; }
+
+      const aliyahYear = data.q1AliyahYear || data.aliyah_year || data.aliyahYear;
+      if (aliyahYear) { setQ1AliyahYear(aliyahYear); hasAny = true; }
+
+      const maritalStatus = data.q1MaritalStatus || data.marital_status || data.maritalStatus;
+      if (maritalStatus) { setQ1MaritalStatus(maritalStatus); hasAny = true; }
+
+      const otherCitizenship = data.q1OtherCitizenship || data.other_citizenship || data.otherCitizenship;
+      if (otherCitizenship) { setQ1OtherCitizenship(otherCitizenship); hasAny = true; }
+
+      const address = data.q1Address || data.q4Address || data.address;
+      if (address) {
+        setQ1Address(address);
+        setQ4Address(address);
+        hasAny = true;
+      }
+
+      // Military service (doc_1)
+      const armyService = data.q1ArmyService || data.army_service || data.armyService;
+      if (armyService) { setQ1ArmyService(armyService); hasAny = true; }
+
+      const militaryId = data.q1MilitaryId || data.military_id || data.militaryId;
+      if (militaryId) { setQ1MilitaryId(militaryId); hasAny = true; }
+
+      const militaryRole = data.q1MilitaryRole || data.military_role || data.militaryRole;
+      if (militaryRole) { setQ1MilitaryRole(militaryRole); hasAny = true; }
+
+      const militaryYears = data.q1MilitaryYears || data.military_years || data.militaryYears;
+      if (militaryYears) { setQ1MilitaryYears(militaryYears); hasAny = true; }
+
+      const exemptionReason = data.q1ExemptionReason || data.exemption_reason || data.exemptionReason;
+      if (exemptionReason) { setQ1ExemptionReason(exemptionReason); hasAny = true; }
+
+      // Education & Workplace (doc_1)
+      const educationHigh = data.q1EducationHigh || data.education_high || data.educationHigh;
+      if (educationHigh) { setQ1EducationHigh(educationHigh); hasAny = true; }
+
+      const educationAcademic = data.q1EducationAcademic || data.education_academic || data.educationAcademic;
+      if (educationAcademic) { setQ1EducationAcademic(educationAcademic); hasAny = true; }
+
+      const workplace1 = data.q1Workplace1 || data.workplace1;
+      if (workplace1) { setQ1Workplace1(workplace1); hasAny = true; }
+
+      const workplace2 = data.q1Workplace2 || data.workplace2;
+      if (workplace2) { setQ1Workplace2(workplace2); hasAny = true; }
+
+      // References (doc_1)
+      const ref1 = data.q1Ref1 || data.ref1 || (data.ref1_name ? `${data.ref1_name}${data.ref1_phone ? ` - ${data.ref1_phone}` : ""}` : "");
+      if (ref1) { setQ1Ref1(ref1); hasAny = true; }
+
+      const ref2 = data.q1Ref2 || data.ref2 || (data.ref2_name ? `${data.ref2_name}${data.ref2_phone ? ` - ${data.ref2_phone}` : ""}` : "");
+      if (ref2) { setQ1Ref2(ref2); hasAny = true; }
+
+      // doc_4 fields
+      const fatherName = data.q4FatherName || data.father_name || data.fatherName;
+      if (fatherName) { setQ4FatherName(fatherName); hasAny = true; }
+
+      // doc_9 fields
+      const nameEn = data.q9NameEn || data.name_en || data.nameEn;
+      if (nameEn) { setQ9NameEn(nameEn); hasAny = true; }
+
+      const roleInProject = data.q9RoleInProject || data.role_in_project || data.roleInProject || data.job_title;
+      if (roleInProject) { setQ9RoleInProject(roleInProject); hasAny = true; }
+
+      const managerName = data.q9ManagerName || data.manager_name || data.managerName;
+      if (managerName) { setQ9ManagerName(managerName); hasAny = true; }
+
+      const startDate = data.q9StartDate || data.start_date || data.startDate;
+      if (startDate) { setQ9StartDate(startDate); hasAny = true; }
+
+      const previousGov = data.q9PreviousGov || data.previous_gov || data.previousGov;
+      if (previousGov) { setQ9PreviousGov(previousGov); hasAny = true; }
+
+      const previousDates = data.q9PreviousDates || data.previous_dates || data.previousDates;
+      if (previousDates) { setQ9PreviousDates(previousDates); hasAny = true; }
+
+      // Signature restoration
+      const signature = data.signatureDataUrl || data.signature_data_url || data.signature_url || data.signatureUrl;
+      if (signature) { setSignatureDataUrl(signature); hasAny = true; }
+
+      if (hasAny) {
+        setIsPreviousDataLoaded(true);
+      }
     }
 
     async function loadPreviousFormData() {
-      // 1. Check client localStorage first for immediate rendering
-      const localKey = `form_data_${candidate.candidate_id}_${docTypeId}`;
-      const localDataStr = typeof window !== "undefined" ? localStorage.getItem(localKey) : null;
-      if (localDataStr) {
-        try {
-          const parsed = JSON.parse(localDataStr);
-          applySavedData(parsed);
-          setIsPreviousDataLoaded(true);
-        } catch {
-          // Ignore
+      // 0. Use initialFormData passed from props if available
+      if (initialFormData) {
+        applySavedData(initialFormData);
+      }
+
+      // 1. Check client localStorage (doc-specific first, then candidate common)
+      if (typeof window !== "undefined") {
+        const docKey = `form_data_${candidate.candidate_id}_${docTypeId}`;
+        const commonKey = `form_data_${candidate.candidate_id}_common`;
+        const commonDataStr = localStorage.getItem(commonKey);
+        if (commonDataStr) {
+          try {
+            applySavedData(JSON.parse(commonDataStr));
+          } catch {
+            // Ignore
+          }
+        }
+        const docDataStr = localStorage.getItem(docKey);
+        if (docDataStr) {
+          try {
+            applySavedData(JSON.parse(docDataStr));
+          } catch {
+            // Ignore
+          }
         }
       }
 
@@ -195,7 +275,6 @@ export default function DigitalFormView({
 
         if (!isCancelled && json.data) {
           applySavedData(json.data);
-          setIsPreviousDataLoaded(true);
         }
       } catch (err) {
         console.warn("Could not load previous form data:", err);
@@ -207,7 +286,7 @@ export default function DigitalFormView({
     return () => {
       isCancelled = true;
     };
-  }, [docTypeId, candidate.candidate_id, token, todayStr]);
+  }, [docTypeId, candidate.candidate_id, token, todayStr, initialFormData]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -264,6 +343,13 @@ export default function DigitalFormView({
         localStorage.setItem(
           `form_data_${candidate.candidate_id}_${docTypeId}`,
           JSON.stringify(currentAnswers)
+        );
+        // Also merge into common answers for this candidate
+        const existingCommonStr = localStorage.getItem(`form_data_${candidate.candidate_id}_common`);
+        const existingCommon = existingCommonStr ? JSON.parse(existingCommonStr) : {};
+        localStorage.setItem(
+          `form_data_${candidate.candidate_id}_common`,
+          JSON.stringify({ ...existingCommon, ...currentAnswers })
         );
       } catch {
         // Ignore
@@ -581,6 +667,7 @@ export default function DigitalFormView({
               <SignaturePad
                 onSignatureChange={setSignatureDataUrl}
                 signerName={candidate.full_name}
+                initialSignatureUrl={signatureDataUrl}
               />
             </div>
 

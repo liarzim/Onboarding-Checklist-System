@@ -7,12 +7,14 @@ interface SignaturePadProps {
   onSignatureChange: (signatureDataUrl: string | null) => void;
   signerName?: string;
   disabled?: boolean;
+  initialSignatureUrl?: string | null;
 }
 
 export default function SignaturePad({
   onSignatureChange,
   signerName,
   disabled = false,
+  initialSignatureUrl,
 }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -37,7 +39,18 @@ export default function SignaturePad({
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-  }, []);
+
+    // Load initial signature if provided
+    if (initialSignatureUrl && initialSignatureUrl.startsWith("data:image")) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, width, height);
+        setHasDrawn(true);
+        onSignatureChange(initialSignatureUrl);
+      };
+      img.src = initialSignatureUrl;
+    }
+  }, [initialSignatureUrl]);
 
   function getCanvasCoords(clientX: number, clientY: number) {
     const canvas = canvasRef.current;

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getVendorSession } from "@/lib/auth";
+import { getVendorSession, getAdminSession } from "@/lib/auth";
 import { assertVendorOwnership, ForbiddenError, NotFoundError } from "@/lib/security";
 import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
 import { uploadFileToCandidateFolder, ensureAuthReady } from "@/lib/drive";
@@ -97,10 +97,23 @@ export async function POST(request: Request) {
       candidate = await assertVendorOwnership(session.vendor_id, candidateId);
       actorEmail = session.email;
     } else {
-      return NextResponse.json(
-        { error: "Unauthorized", message: "נדרשת הזדהות ספק או טוקן מועמד תקין" },
-        { status: 401 }
-      );
+      const adminSession = await getAdminSession();
+      if (adminSession) {
+        candidate = await sheetsRepository.getCandidateById(candidateId);
+        if (!candidate) {
+          return NextResponse.json(
+            { error: "Not Found", message: "מועמד לא נמצא" },
+            { status: 404 }
+          );
+        }
+        actorEmail = adminSession.email;
+        actorRole = "Admin";
+      } else {
+        return NextResponse.json(
+          { error: "Unauthorized", message: "נדרשת הזדהות ספק, מנהל או טוקן מועמד תקין" },
+          { status: 401 }
+        );
+      }
     }
 
     // 2. Validate File Type based on docTypeId & Admin Upload Policy

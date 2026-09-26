@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getVendorSession } from "@/lib/auth";
+import { getVendorSession, getAdminSession } from "@/lib/auth";
 import { assertVendorOwnership } from "@/lib/security";
 import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
 import { ensureAuthReady } from "@/lib/drive";
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // Auth verification: candidate token or vendor session
+    // Auth verification: candidate token, admin session, or vendor session
     if (token) {
       const candidateByToken = await sheetsRepository.getCandidateByToken(token);
       if (!candidateByToken || candidateByToken.candidate_id !== candidateId) {
@@ -33,33 +33,62 @@ export async function GET(request: Request) {
         );
       }
     } else {
-      const session = await getVendorSession();
-      if (!session) {
-        return NextResponse.json(
-          { error: "Unauthorized", message: "נדרשת הזדהות ספק או טוקן מועמד" },
-          { status: 401 }
-        );
+      const adminSession = await getAdminSession();
+      if (!adminSession) {
+        const vendorSession = await getVendorSession();
+        if (!vendorSession) {
+          return NextResponse.json(
+            { error: "Unauthorized", message: "נדרשת הזדהות ספק, מנהל או טוקן מועמד" },
+            { status: 401 }
+          );
+        }
+        await assertVendorOwnership(vendorSession.vendor_id, candidateId);
       }
-      await assertVendorOwnership(session.vendor_id, candidateId);
     }
 
-    // Retrieve checklist item
-    const item = await sheetsRepository.getChecklistItem(candidateId, docTypeId);
-    let parsedData = null;
+    // Retrieve checklist items for candidate
+    const checklist = await sheetsRepository.getChecklist(candidateId);
+    const currentItem = checklist.find((c) => c.doc_type_id === docTypeId);
 
-    if (item?.form_data) {
+    let parsedData: Record<string, any> = {};
+
+    // 1. Merge answers from ANY other filled documents of this candidate as base
+    for (const item of checklist) {
+      if (item.form_data) {
+        try {
+          const itemData = JSON.parse(item.form_data);
+          parsedData = { ...parsedData, ...itemData };
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // 2. Overlay specific document answers if available
+    if (currentItem?.form_data) {
       try {
-        parsedData = JSON.parse(item.form_data);
+        const docSpecific = JSON.parse(currentItem.form_data);
+        parsedData = { ...parsedData, ...docSpecific };
       } catch (err) {
         console.warn("Failed to parse form_data JSON:", err);
       }
     }
 
+    // 3. Fallback to candidate profile data
+    const candidate = await sheetsRepository.getCandidateById(candidateId);
+    if (candidate) {
+      if (candidate.signature_url && !parsedData.signatureDataUrl) {
+        parsedData.signatureDataUrl = candidate.signature_url;
+      }
+    }
+
+    const hasAnyData = Object.keys(parsedData).length > 0;
+
     return NextResponse.json({
       success: true,
-      data: parsedData,
-      status: item?.status || "missing",
-      updated_at: item?.updated_at || null,
+      data: hasAnyData ? parsedData : null,
+      status: currentItem?.status || "missing",
+      updated_at: currentItem?.updated_at || null,
     });
   } catch (error) {
     console.error("Error in GET /api/documents/form-data:", error);

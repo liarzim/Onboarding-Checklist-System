@@ -43,6 +43,7 @@ interface CandidatePortalClientProps {
     status: string;
     file_drive_id?: string | null;
     file_drive_url?: string | null;
+    form_data?: string | null;
   }>;
 }
 

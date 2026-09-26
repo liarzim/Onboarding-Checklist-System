@@ -164,12 +164,29 @@ export async function POST(request: Request) {
 
     // Ensure all 11 checklist items are marked as uploaded so verification succeeds
     const docTypes = await sheetsRepository.getDocumentTypes();
+    const portalFormDataObj = {
+      q1BirthDate: data.birth_date,
+      q1BirthCountry: data.birth_country,
+      q1MaritalStatus: data.marital_status,
+      q1Address: data.address,
+      q1ArmyService: data.army_service,
+      q1MilitaryRole: data.military_role || "",
+      q1Ref1: `${data.ref1_name} - ${data.ref1_phone}`,
+      q1Ref2: `${data.ref2_name} - ${data.ref2_phone}`,
+      q4FatherName: "",
+      q4Address: data.address,
+      q9RoleInProject: data.job_title,
+      signatureDataUrl: data.signature_data_url,
+    };
+    const portalFormDataStr = JSON.stringify(portalFormDataObj);
+
     for (const dt of docTypes) {
       await sheetsRepository.updateChecklistItem(candidate.candidate_id, dt.doc_type_id, {
         status: "Uploaded",
         file_name: `${dt.doc_name} - ${data.full_name.trim()}.pdf`,
         file_drive_id: `file_${dt.doc_type_id}_${candidate.candidate_id}`,
         file_drive_url: "#",
+        form_data: portalFormDataStr,
       });
     }
 

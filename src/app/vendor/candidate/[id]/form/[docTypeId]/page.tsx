@@ -14,6 +14,7 @@ export default function CandidateDigitalFormPage() {
   const docTypeId = typeof params?.docTypeId === "string" ? params.docTypeId : "";
 
   const [candidate, setCandidate] = useState<any | null>(null);
+  const [initialFormData, setInitialFormData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +31,40 @@ export default function CandidateDigitalFormPage() {
         }
         const data = await res.json();
         setCandidate(data.candidate);
+
+        // Extract and aggregate previous form answers across all candidate checklist items
+        if (data.items && Array.isArray(data.items)) {
+          let mergedAnswers: any = {};
+          data.items.forEach((it: any) => {
+            if (it.form_data) {
+              try {
+                const parsed = JSON.parse(it.form_data);
+                mergedAnswers = { ...mergedAnswers, ...parsed };
+              } catch {
+                // Ignore
+              }
+            }
+          });
+
+          // Overlay specific doc answers with highest priority
+          const currentDoc = data.items.find((i: any) => i.doc_type_id === docTypeId);
+          if (currentDoc?.form_data) {
+            try {
+              const currentParsed = JSON.parse(currentDoc.form_data);
+              mergedAnswers = { ...mergedAnswers, ...currentParsed };
+            } catch {
+              // Ignore
+            }
+          }
+
+          if (data.candidate?.signature_url && !mergedAnswers.signatureDataUrl) {
+            mergedAnswers.signatureDataUrl = data.candidate.signature_url;
+          }
+
+          if (Object.keys(mergedAnswers).length > 0) {
+            setInitialFormData(mergedAnswers);
+          }
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "שגיאה בטעינת הנתונים");
       } finally {
@@ -38,7 +73,7 @@ export default function CandidateDigitalFormPage() {
     }
 
     loadData();
-  }, [candidateId]);
+  }, [candidateId, docTypeId]);
 
   if (loading) {
     return (
@@ -70,7 +105,11 @@ export default function CandidateDigitalFormPage() {
 
   return (
     <div className="container mx-auto px-4 py-6">
-      <DigitalFormView docTypeId={docTypeId} candidate={candidate} />
+      <DigitalFormView
+        docTypeId={docTypeId}
+        candidate={candidate}
+        initialFormData={initialFormData}
+      />
     </div>
   );
 }
