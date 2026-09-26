@@ -567,9 +567,10 @@ export default function DigitalFormView({
         {/* Printable Form Container - Captured by html2canvas */}
         <div
           ref={printRef}
+          data-single-page={docTypeId === "doc_1" ? "true" : undefined}
           className={`bg-white text-slate-900 ${
             docTypeId === "doc_1"
-              ? "p-6 sm:p-8 max-w-[850px] mx-auto border border-slate-300 shadow-sm space-y-3"
+              ? "p-4 sm:p-5 max-w-[850px] mx-auto border border-slate-300 shadow-sm space-y-2.5"
               : "rounded-2xl border border-slate-200 p-8 sm:p-12 shadow-sm space-y-8"
           }`}
           dir="rtl"
@@ -999,7 +1000,7 @@ function Doc1PersonalQuestionnaire({
   const idDigits: string[] = paddedId.split("");
 
   return (
-    <div className="space-y-3 text-slate-900 bg-white" dir="rtl">
+    <div className="space-y-2 text-slate-900 bg-white" dir="rtl" data-single-page="true">
       {/* 1. Top Security Warning Box */}
       <div className="border-2 border-slate-900 py-1 px-2 text-center text-xs font-bold text-slate-900 leading-tight">
         מסמך זה מכיל מידע לצורך הליך של הגנת סודיות. כל המוסרו שלא כדין עובר עבירה
@@ -1011,7 +1012,7 @@ function Doc1PersonalQuestionnaire({
         <img
           src="/logos/israel_emblem.png"
           alt="סמל מדינת ישראל"
-          className="h-11 w-auto object-contain mx-auto"
+          className="h-10 w-auto object-contain mx-auto"
         />
         <div className="text-[11px] font-bold text-slate-900">מדינת ישראל</div>
         <div className="text-[10px] font-bold text-slate-900">
@@ -1053,11 +1054,11 @@ function Doc1PersonalQuestionnaire({
         <table className="w-full border-collapse border border-slate-900 text-xs">
           <thead>
             <tr className="bg-slate-100 text-slate-900">
-              <th className="border border-slate-900 p-1 w-16 text-center font-bold"> </th>
-              <th className="border border-slate-900 p-1 text-center font-bold">שם משפחה</th>
-              <th className="border border-slate-900 p-1 text-center font-bold">שם פרטי</th>
-              <th className="border border-slate-900 p-1 text-center font-bold">שם אב</th>
-              <th className="border border-slate-900 p-1 text-center font-bold">שם משפחה קודם/נוסף</th>
+              <th className="border border-slate-900 p-1 w-[11%] text-center font-bold"> </th>
+              <th className="border border-slate-900 p-1 w-[22%] text-center font-bold">שם משפחה</th>
+              <th className="border border-slate-900 p-1 w-[22%] text-center font-bold">שם פרטי</th>
+              <th className="border border-slate-900 p-1 w-[20%] text-center font-bold">שם אב</th>
+              <th className="border border-slate-900 p-1 w-[25%] text-center font-bold">שם משפחה קודם/נוסף</th>
             </tr>
           </thead>
           <tbody>
@@ -1067,46 +1068,46 @@ function Doc1PersonalQuestionnaire({
                 נוכחי
               </td>
               <td className="border border-slate-900 p-1 text-center align-middle">
-                <span className="text-[9px] text-slate-500 block text-right">בעברית:</span>
+                <span className="text-[9px] text-slate-500 block text-right pr-0.5">בעברית:</span>
                 <input
                   type="text"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="משפחה"
-                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-0.5 text-xs sm:text-sm"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                   dir="rtl"
                 />
               </td>
               <td className="border border-slate-900 p-1 text-center align-middle">
-                <span className="text-[9px] text-slate-500 block text-right">בעברית:</span>
+                <span className="text-[9px] text-slate-500 block text-right pr-0.5">בעברית:</span>
                 <input
                   type="text"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="פרטי"
-                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-0.5 text-xs sm:text-sm"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                   dir="rtl"
                 />
               </td>
               <td className="border border-slate-900 p-1 text-center align-middle">
-                <span className="text-[9px] text-slate-500 block text-right">בעברית:</span>
+                <span className="text-[9px] text-slate-500 block text-right pr-0.5">בעברית:</span>
                 <input
                   type="text"
                   value={fatherName}
                   onChange={(e) => setFatherName(e.target.value)}
                   placeholder="שם האב"
-                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-0.5 text-xs sm:text-sm"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                   dir="rtl"
                 />
               </td>
               <td className="border border-slate-900 p-1 text-center align-middle">
-                <span className="text-[9px] text-slate-500 block text-right">בעברית:</span>
+                <span className="text-[9px] text-slate-500 block text-right pr-0.5">בעברית:</span>
                 <input
                   type="text"
                   value={prevLastName}
                   onChange={(e) => setPrevLastName(e.target.value)}
                   placeholder="קודם/נוסף"
-                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-0.5 text-xs sm:text-sm"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                   dir="rtl"
                 />
               </td>
@@ -1114,34 +1115,34 @@ function Doc1PersonalQuestionnaire({
             {/* Current Names Row - English */}
             <tr>
               <td className="border border-slate-900 p-1 text-center align-middle">
-                <span className="text-[9px] text-slate-500 block text-right">בלועזית:</span>
+                <span className="text-[9px] text-slate-500 block text-right pr-0.5">בלועזית:</span>
                 <input
                   type="text"
                   value={nameEnLast}
                   onChange={(e) => setNameEnLast(e.target.value)}
                   placeholder="Last Name"
-                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-0.5 text-xs sm:text-sm"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                   dir="ltr"
                 />
               </td>
               <td className="border border-slate-900 p-1 text-center align-middle">
-                <span className="text-[9px] text-slate-500 block text-right">בלועזית:</span>
+                <span className="text-[9px] text-slate-500 block text-right pr-0.5">בלועזית:</span>
                 <input
                   type="text"
                   value={nameEnFirst}
                   onChange={(e) => setNameEnFirst(e.target.value)}
                   placeholder="First Name"
-                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-0.5 text-xs sm:text-sm"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                   dir="ltr"
                 />
               </td>
               <td className="border border-slate-900 p-1 text-center align-middle bg-slate-50/40">
-                <span className="text-[9px] text-slate-400 block text-right">בלועזית:</span>
-                <span className="text-slate-300">-</span>
+                <span className="text-[9px] text-slate-400 block text-right pr-0.5">בלועזית:</span>
+                <span className="text-slate-300 block h-8 leading-8">-</span>
               </td>
               <td className="border border-slate-900 p-1 text-center align-middle bg-slate-50/40">
-                <span className="text-[9px] text-slate-400 block text-right">בלועזית:</span>
-                <span className="text-slate-300">-</span>
+                <span className="text-[9px] text-slate-400 block text-right pr-0.5">בלועזית:</span>
+                <span className="text-slate-300 block h-8 leading-8">-</span>
               </td>
             </tr>
           </tbody>
@@ -1151,10 +1152,10 @@ function Doc1PersonalQuestionnaire({
         <table className="w-full border-collapse border border-slate-900 text-xs">
           <thead>
             <tr className="bg-slate-100 text-slate-900">
-              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "45%" }}>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "44%" }}>
                 מס' זהות
               </th>
-              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "35%" }}>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "36%" }}>
                 מס' זיהוי קודם/נוסף
               </th>
               <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "20%" }}>
@@ -1165,12 +1166,12 @@ function Doc1PersonalQuestionnaire({
           <tbody>
             <tr>
               {/* 9 Centered Square Boxes for ID Digits */}
-              <td className="border border-slate-900 p-1.5 text-center align-middle">
+              <td className="border border-slate-900 p-1.5 text-center align-middle min-h-[44px]">
                 <div className="flex items-center justify-center gap-1" dir="ltr">
                   {idDigits.map((digit: string, i: number) => (
                     <div
                       key={i}
-                      className="w-6 h-6 sm:w-7 sm:h-7 border border-slate-900 flex items-center justify-center font-mono font-bold text-xs sm:text-sm text-slate-900 bg-white shadow-2xs"
+                      className="w-7 h-7 sm:w-8 sm:h-8 border border-slate-900 flex items-center justify-center font-mono font-bold text-xs sm:text-sm text-slate-900 bg-white"
                     >
                       {digit}
                     </div>
@@ -1178,12 +1179,12 @@ function Doc1PersonalQuestionnaire({
                 </div>
               </td>
               {/* 9 Empty/Placeholder Boxes for Previous ID */}
-              <td className="border border-slate-900 p-1.5 text-center align-middle">
+              <td className="border border-slate-900 p-1.5 text-center align-middle min-h-[44px]">
                 <div className="flex items-center justify-center gap-1" dir="ltr">
                   {Array.from({ length: 9 }).map((_, i) => (
                     <div
                       key={i}
-                      className="w-6 h-6 sm:w-7 sm:h-7 border border-slate-400 flex items-center justify-center font-mono text-xs text-slate-300 bg-slate-50/50"
+                      className="w-7 h-7 sm:w-8 sm:h-8 border border-slate-400 flex items-center justify-center font-mono text-xs text-slate-300 bg-slate-50/50"
                     >
                       {" "}
                     </div>
@@ -1191,9 +1192,9 @@ function Doc1PersonalQuestionnaire({
                 </div>
               </td>
               {/* Gender Radio Choices */}
-              <td className="border border-slate-900 p-1.5 text-center align-middle">
+              <td className="border border-slate-900 p-1.5 text-center align-middle min-h-[44px]">
                 <div className="flex items-center justify-center gap-3 text-xs font-bold">
-                  <label className="flex items-center gap-1 cursor-pointer">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
                     <input
                       type="radio"
                       name="q1Gender"
@@ -1204,7 +1205,7 @@ function Doc1PersonalQuestionnaire({
                     />
                     <span>זכר</span>
                   </label>
-                  <label className="flex items-center gap-1 cursor-pointer">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
                     <input
                       type="radio"
                       name="q1Gender"
@@ -1225,11 +1226,11 @@ function Doc1PersonalQuestionnaire({
         <table className="w-full border-collapse border border-slate-900 text-xs">
           <thead>
             <tr className="bg-slate-100 text-slate-900">
-              <th className="border border-slate-900 p-1 text-center font-bold">דת</th>
-              <th className="border border-slate-900 p-1 text-center font-bold">תאריך לידה</th>
-              <th className="border border-slate-900 p-1 text-center font-bold">ארץ לידה</th>
-              <th className="border border-slate-900 p-1 text-center font-bold">תאריך עליה</th>
-              <th className="border border-slate-900 p-1 text-center font-bold">
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "13%" }}>דת</th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "17%" }}>תאריך לידה</th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "17%" }}>ארץ לידה</th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "15%" }}>תאריך עליה</th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "38%" }}>
                 אזרחות נוספת או מעמד של תושב קבע (אם יש ציין)
               </th>
             </tr>
@@ -1237,31 +1238,31 @@ function Doc1PersonalQuestionnaire({
           <tbody>
             <tr>
               {/* Religion */}
-              <td className="border border-slate-900 p-1 text-center align-middle">
+              <td className="border border-slate-900 p-1.5 text-center align-middle min-h-[50px]">
                 <input
                   type="text"
                   value={religion}
                   onChange={(e) => setReligion(e.target.value)}
-                  placeholder="למשל: יהודי/ת"
-                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  placeholder="יהודי/ת"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                   dir="rtl"
                 />
               </td>
               {/* Birth Date */}
-              <td className="border border-slate-900 p-1 text-center align-middle">
+              <td className="border border-slate-900 p-1.5 text-center align-middle min-h-[50px]">
                 <input
                   type="text"
                   value={birthDate}
                   onChange={(e) => setBirthDate(e.target.value)}
                   placeholder="DD/MM/YYYY"
-                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                   dir="ltr"
                 />
               </td>
               {/* Birth Country */}
-              <td className="border border-slate-900 p-1 text-center align-middle">
-                <div className="flex flex-col gap-1 text-[11px] text-right">
-                  <label className="flex items-center gap-1 cursor-pointer">
+              <td className="border border-slate-900 p-1.5 text-center align-middle min-h-[50px]">
+                <div className="flex flex-col gap-1 text-xs text-right py-0.5">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
                     <input
                       type="radio"
                       name="q1BirthCountryChoice"
@@ -1269,9 +1270,9 @@ function Doc1PersonalQuestionnaire({
                       onChange={() => setBirthCountry("ישראל")}
                       className="w-3.5 h-3.5 text-slate-900"
                     />
-                    <span>ישראל</span>
+                    <span className="font-bold">ישראל</span>
                   </label>
-                  <label className="flex items-center gap-1 cursor-pointer">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
                     <input
                       type="radio"
                       name="q1BirthCountryChoice"
@@ -1281,13 +1282,13 @@ function Doc1PersonalQuestionnaire({
                       }}
                       className="w-3.5 h-3.5 text-slate-900"
                     />
-                    <span>אחר:</span>
+                    <span className="font-bold">אחר:</span>
                     {birthCountry !== "ישראל" && (
                       <input
                         type="text"
                         value={birthCountry}
                         onChange={(e) => setBirthCountry(e.target.value)}
-                        className="border-b border-slate-900 text-center font-bold text-xs bg-transparent w-16 focus:outline-none"
+                        className="border-b border-slate-900 text-center font-bold text-xs bg-transparent w-16 focus:outline-none p-0 h-6 leading-6"
                         placeholder="ארץ"
                       />
                     )}
@@ -1295,27 +1296,27 @@ function Doc1PersonalQuestionnaire({
                 </div>
               </td>
               {/* Aliyah Date */}
-              <td className="border border-slate-900 p-1 text-center align-middle">
+              <td className="border border-slate-900 p-1.5 text-center align-middle min-h-[50px]">
                 <input
                   type="text"
                   value={aliyahYear}
                   onChange={(e) => setAliyahYear(e.target.value)}
                   placeholder="יליד הארץ"
-                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                 />
               </td>
               {/* Additional Citizenship */}
-              <td className="border border-slate-900 p-1 text-center align-middle">
-                <div className="flex items-center justify-center gap-2 text-[11px]">
+              <td className="border border-slate-900 p-1.5 text-center align-middle min-h-[50px]">
+                <div className="flex items-center justify-center flex-wrap gap-2 text-xs py-0.5">
                   <label className="flex items-center gap-1 cursor-pointer">
                     <input
                       type="radio"
                       name="q1CitizenshipChoice"
                       checked={otherCitizenship === "ישראלית"}
                       onChange={() => setOtherCitizenship("ישראלית")}
-                      className="w-3 h-3 text-slate-900"
+                      className="w-3.5 h-3.5 text-slate-900"
                     />
-                    <span>ישראלית</span>
+                    <span className="font-bold">ישראלית</span>
                   </label>
                   <label className="flex items-center gap-1 cursor-pointer">
                     <input
@@ -1323,9 +1324,9 @@ function Doc1PersonalQuestionnaire({
                       name="q1CitizenshipChoice"
                       checked={otherCitizenship === "ללא" || !otherCitizenship}
                       onChange={() => setOtherCitizenship("ללא")}
-                      className="w-3 h-3 text-slate-900"
+                      className="w-3.5 h-3.5 text-slate-900"
                     />
-                    <span>ללא</span>
+                    <span className="font-bold">ללא</span>
                   </label>
                   <label className="flex items-center gap-1 cursor-pointer">
                     <input
@@ -1335,15 +1336,15 @@ function Doc1PersonalQuestionnaire({
                       onChange={() => {
                         if (otherCitizenship === "ישראלית" || otherCitizenship === "ללא") setOtherCitizenship("אחרת");
                       }}
-                      className="w-3 h-3 text-slate-900"
+                      className="w-3.5 h-3.5 text-slate-900"
                     />
-                    <span>אחרת:</span>
+                    <span className="font-bold">אחרת:</span>
                     {otherCitizenship !== "ישראלית" && otherCitizenship !== "ללא" && (
                       <input
                         type="text"
                         value={otherCitizenship === "אחרת" ? "" : otherCitizenship}
                         onChange={(e) => setOtherCitizenship(e.target.value)}
-                        className="border-b border-slate-900 text-center font-bold text-xs bg-transparent w-16 focus:outline-none"
+                        className="border-b border-slate-900 text-center font-bold text-xs bg-transparent w-16 focus:outline-none p-0 h-6 leading-6"
                         placeholder="ציין"
                       />
                     )}
@@ -1368,80 +1369,80 @@ function Doc1PersonalQuestionnaire({
         <table className="w-full border-collapse border border-slate-900 text-xs">
           <thead>
             <tr className="bg-slate-100 text-slate-900">
-              <th className="border border-slate-900 p-1 text-center font-bold">ישוב</th>
-              <th className="border border-slate-900 p-1 text-center font-bold">רחוב</th>
-              <th className="border border-slate-900 p-1 text-center font-bold">מס' בית/דירה</th>
-              <th className="border border-slate-900 p-1 text-center font-bold">מיקוד</th>
-              <th className="border border-slate-900 p-1 text-center font-bold">טלפון בבית</th>
-              <th className="border border-slate-900 p-1 text-center font-bold">נייד</th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "18%" }}>ישוב</th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "28%" }}>רחוב</th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "10%" }}>מס' בית/דירה</th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "10%" }}>מיקוד</th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "17%" }}>טלפון בבית</th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "17%" }}>נייד</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               {/* City */}
-              <td className="border border-slate-900 p-1 text-center align-middle">
+              <td className="border border-slate-900 p-1 text-center align-middle min-h-[46px]">
                 <input
                   type="text"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
                   placeholder="עיר / ישוב"
-                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                   dir="rtl"
                 />
               </td>
               {/* Street */}
-              <td className="border border-slate-900 p-1 text-center align-middle">
+              <td className="border border-slate-900 p-1 text-center align-middle min-h-[46px]">
                 <input
                   type="text"
                   value={street}
                   onChange={(e) => setStreet(e.target.value)}
                   placeholder="שם רחוב"
-                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                   dir="rtl"
                 />
               </td>
               {/* House Number */}
-              <td className="border border-slate-900 p-1 text-center align-middle">
+              <td className="border border-slate-900 p-1 text-center align-middle min-h-[46px]">
                 <input
                   type="text"
                   value={houseNumber}
                   onChange={(e) => setHouseNumber(e.target.value)}
                   placeholder="מספר"
-                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                 />
               </td>
               {/* Zip Code */}
-              <td className="border border-slate-900 p-1 text-center align-middle">
+              <td className="border border-slate-900 p-1 text-center align-middle min-h-[46px]">
                 <input
                   type="text"
                   value={zipCode}
                   onChange={(e) => setZipCode(e.target.value)}
                   placeholder="מיקוד"
-                  className="w-full text-center font-mono font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  className="w-full text-center font-mono font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                   dir="ltr"
                 />
               </td>
               {/* Home Phone */}
-              <td className="border border-slate-900 p-1 text-center align-middle">
+              <td className="border border-slate-900 p-1 text-center align-middle min-h-[46px]">
                 <input
                   type="text"
                   value={homePhone}
                   onChange={(e) => setHomePhone(e.target.value)}
                   onBlur={() => setHomePhone(formatIsraeliPhone(homePhone))}
                   placeholder="0X-XXXXXXX"
-                  className="w-full text-center font-mono font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  className="w-full text-center font-mono font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                   dir="ltr"
                 />
               </td>
               {/* Mobile Phone */}
-              <td className="border border-slate-900 p-1 text-center align-middle">
+              <td className="border border-slate-900 p-1 text-center align-middle min-h-[46px]">
                 <input
                   type="text"
                   value={mobilePhone}
                   onChange={(e) => setMobilePhone(e.target.value)}
                   onBlur={() => setMobilePhone(formatIsraeliPhone(mobilePhone))}
                   placeholder="05X-XXXXXXX"
-                  className="w-full text-center font-mono font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  className="w-full text-center font-mono font-bold text-slate-900 bg-transparent focus:outline-none text-xs sm:text-sm h-8 leading-8 py-0 px-1 border-0 m-0"
                   dir="ltr"
                 />
               </td>
@@ -1450,9 +1451,9 @@ function Doc1PersonalQuestionnaire({
         </table>
 
         {/* Email Full-Width Row */}
-        <div className="border border-slate-900 p-1 flex items-center justify-between text-xs">
-          <span className="font-bold text-slate-800 pr-2">כתובת דואר אלקטרוני:</span>
-          <span className="font-mono font-bold text-slate-900 text-xs sm:text-sm pl-2" dir="ltr">
+        <div className="border border-slate-900 py-1.5 px-3 flex items-center justify-between text-xs">
+          <span className="font-bold text-slate-800">כתובת דואר אלקטרוני:</span>
+          <span className="font-mono font-bold text-slate-900 text-xs sm:text-sm" dir="ltr">
             {candidate.email}
           </span>
         </div>
@@ -1465,13 +1466,13 @@ function Doc1PersonalQuestionnaire({
           </div>
           <div className="flex items-center gap-2">
             <span>חתימת המועמד/ת:</span>
-            <div className="h-9 sm:h-10 w-40 border-b border-slate-900 flex items-center justify-center">
+            <div className="h-10 sm:h-11 w-44 border-b border-slate-900 flex items-center justify-center">
               {signatureDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={signatureDataUrl}
                   alt="חתימת המועמד/ת"
-                  className="h-8 sm:h-9 w-auto max-w-[130px] object-contain"
+                  className="h-9 sm:h-10 w-auto max-w-[140px] object-contain"
                 />
               ) : (
                 <span className="text-[10px] text-slate-400 italic">
@@ -1495,13 +1496,13 @@ function Doc1PersonalQuestionnaire({
               <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "30%" }}>
                 הגוף המשלח
               </th>
-              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "25%" }}>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "26%" }}>
                 תפקיד
               </th>
               <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "22%" }}>
                 מעמד
               </th>
-              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "23%" }}>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "22%" }}>
                 היבטי אבטחה
               </th>
             </tr>
@@ -1510,11 +1511,15 @@ function Doc1PersonalQuestionnaire({
             <tr>
               {/* Sending Entity */}
               <td className="border border-slate-900 p-1.5 text-center align-middle font-bold text-slate-900 text-xs">
-                {candidate.vendor_company_name || candidate.vendor_id || candidate.project_id}
+                <div className="break-words whitespace-normal text-xs font-bold leading-snug py-1">
+                  {candidate.vendor_company_name || candidate.vendor_id || candidate.project_id}
+                </div>
               </td>
               {/* Role */}
               <td className="border border-slate-900 p-1.5 text-center align-middle font-bold text-slate-900 text-xs">
-                יועץ / מומחה ({candidate.project_id})
+                <div className="break-words whitespace-normal text-xs font-bold leading-snug py-1">
+                  יועץ / מומחה ({candidate.project_id})
+                </div>
               </td>
               {/* Employment Status Checkboxes */}
               <td className="border border-slate-900 p-1.5 align-middle">

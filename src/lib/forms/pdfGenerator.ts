@@ -57,6 +57,37 @@ export async function generatePdfFromElement(
     (a, b) => a - b
   );
 
+  // Check if element is designated as single-page document
+  const isSinglePage =
+    element.getAttribute("data-single-page") === "true" ||
+    element.classList.contains("single-page-pdf") ||
+    !!element.querySelector('[data-single-page="true"]');
+
+  const totalHeightMm = canvasHeight / pxPerMm;
+
+  // If designated as single page or content height is close to single A4 page
+  if (isSinglePage || (totalHeightMm <= 315 && isSinglePage)) {
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
+
+    const pageImgData = canvas.toDataURL("image/jpeg", 0.98);
+
+    if (totalHeightMm <= 297) {
+      pdf.addImage(pageImgData, "JPEG", 0, 0, 210, totalHeightMm);
+    } else {
+      const scale = 295 / totalHeightMm;
+      const scaledWidth = 210 * scale;
+      const xOffset = (210 - scaledWidth) / 2;
+      pdf.addImage(pageImgData, "JPEG", xOffset, 1, scaledWidth, 295);
+    }
+
+    const pdfBlob = pdf.output("blob");
+    return new File([pdfBlob], fileName, { type: "application/pdf" });
+  }
+
   const pdf = new jsPDF({
     orientation: "portrait",
     unit: "mm",
