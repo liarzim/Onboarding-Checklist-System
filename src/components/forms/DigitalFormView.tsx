@@ -96,6 +96,7 @@ export default function DigitalFormView({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isPreviousDataLoaded, setIsPreviousDataLoaded] = useState(false);
 
   // doc_1 fields
   const [q1BirthDate, setQ1BirthDate] = useState("");
@@ -131,6 +132,83 @@ export default function DigitalFormView({
   // Acknowledgement checkbox
   const [agreeTerms, setAgreeTerms] = useState(true);
 
+  // Load previous form answers for editing/correction
+  useEffect(() => {
+    let isCancelled = false;
+
+    function applySavedData(data: any) {
+      if (!data || typeof data !== "object") return;
+      if (data.q1BirthDate !== undefined) setQ1BirthDate(data.q1BirthDate || "");
+      if (data.q1BirthCountry !== undefined) setQ1BirthCountry(data.q1BirthCountry || "ישראל");
+      if (data.q1AliyahYear !== undefined) setQ1AliyahYear(data.q1AliyahYear || "");
+      if (data.q1MaritalStatus !== undefined) setQ1MaritalStatus(data.q1MaritalStatus || "רווק/ה");
+      if (data.q1OtherCitizenship !== undefined) setQ1OtherCitizenship(data.q1OtherCitizenship || "אין");
+      if (data.q1Address !== undefined) setQ1Address(data.q1Address || "");
+      if (data.q1ArmyService !== undefined) setQ1ArmyService(data.q1ArmyService || 'שירות מלא בצה"ל');
+      if (data.q1MilitaryId !== undefined) setQ1MilitaryId(data.q1MilitaryId || "");
+      if (data.q1MilitaryRole !== undefined) setQ1MilitaryRole(data.q1MilitaryRole || "");
+      if (data.q1MilitaryYears !== undefined) setQ1MilitaryYears(data.q1MilitaryYears || "");
+      if (data.q1ExemptionReason !== undefined) setQ1ExemptionReason(data.q1ExemptionReason || "");
+      if (data.q1EducationHigh !== undefined) setQ1EducationHigh(data.q1EducationHigh || "");
+      if (data.q1EducationAcademic !== undefined) setQ1EducationAcademic(data.q1EducationAcademic || "");
+      if (data.q1Workplace1 !== undefined) setQ1Workplace1(data.q1Workplace1 || "");
+      if (data.q1Workplace2 !== undefined) setQ1Workplace2(data.q1Workplace2 || "");
+      if (data.q1Ref1 !== undefined) setQ1Ref1(data.q1Ref1 || "");
+      if (data.q1Ref2 !== undefined) setQ1Ref2(data.q1Ref2 || "");
+
+      if (data.q4FatherName !== undefined) setQ4FatherName(data.q4FatherName || "");
+      if (data.q4Address !== undefined) setQ4Address(data.q4Address || "");
+
+      if (data.q9NameEn !== undefined) setQ9NameEn(data.q9NameEn || "");
+      if (data.q9RoleInProject !== undefined) setQ9RoleInProject(data.q9RoleInProject || "");
+      if (data.q9ManagerName !== undefined) setQ9ManagerName(data.q9ManagerName || "");
+      if (data.q9StartDate !== undefined) setQ9StartDate(data.q9StartDate || todayStr);
+      if (data.q9PreviousGov !== undefined) setQ9PreviousGov(data.q9PreviousGov || "לא");
+      if (data.q9PreviousDates !== undefined) setQ9PreviousDates(data.q9PreviousDates || "");
+    }
+
+    async function loadPreviousFormData() {
+      // 1. Check client localStorage first for immediate rendering
+      const localKey = `form_data_${candidate.candidate_id}_${docTypeId}`;
+      const localDataStr = typeof window !== "undefined" ? localStorage.getItem(localKey) : null;
+      if (localDataStr) {
+        try {
+          const parsed = JSON.parse(localDataStr);
+          applySavedData(parsed);
+          setIsPreviousDataLoaded(true);
+        } catch {
+          // Ignore
+        }
+      }
+
+      // 2. Fetch server database values
+      try {
+        const queryParams = new URLSearchParams({
+          candidate_id: candidate.candidate_id,
+          doc_type_id: docTypeId,
+        });
+        if (token) queryParams.set("token", token);
+
+        const res = await fetch(`/api/documents/form-data?${queryParams.toString()}`);
+        if (!res.ok) return;
+        const json = await res.json();
+
+        if (!isCancelled && json.data) {
+          applySavedData(json.data);
+          setIsPreviousDataLoaded(true);
+        }
+      } catch (err) {
+        console.warn("Could not load previous form data:", err);
+      }
+    }
+
+    loadPreviousFormData();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [docTypeId, candidate.candidate_id, token, todayStr]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMessage(null);
@@ -153,8 +231,47 @@ export default function DigitalFormView({
     try {
       setIsSubmitting(true);
 
+      const currentAnswers = {
+        q1BirthDate,
+        q1BirthCountry,
+        q1AliyahYear,
+        q1MaritalStatus,
+        q1OtherCitizenship,
+        q1Address,
+        q1ArmyService,
+        q1MilitaryId,
+        q1MilitaryRole,
+        q1MilitaryYears,
+        q1ExemptionReason,
+        q1EducationHigh,
+        q1EducationAcademic,
+        q1Workplace1,
+        q1Workplace2,
+        q1Ref1,
+        q1Ref2,
+        q4FatherName,
+        q4Address,
+        q9NameEn,
+        q9RoleInProject,
+        q9ManagerName,
+        q9StartDate,
+        q9PreviousGov,
+        q9PreviousDates,
+      };
+
+      // Save to localStorage for instant client persistence
+      try {
+        localStorage.setItem(
+          `form_data_${candidate.candidate_id}_${docTypeId}`,
+          JSON.stringify(currentAnswers)
+        );
+      } catch {
+        // Ignore
+      }
+
       // 1. Generate formatted PDF File directly from the rendered form DOM
-      const targetFileName = `${docInfo.name || meta.title}.${candidate.full_name}.pdf`;
+      const cleanId = candidate.id_number ? `.${candidate.id_number}` : "";
+      const targetFileName = `${docInfo.name || meta.title}.${candidate.full_name}${cleanId}.pdf`;
       const pdfFile = await generatePdfFromElement(printRef.current, targetFileName);
 
       // 2. Prepare FormData for /api/documents/upload
@@ -162,6 +279,7 @@ export default function DigitalFormView({
       formData.append("file", pdfFile);
       formData.append("candidate_id", candidate.candidate_id);
       formData.append("doc_type_id", docTypeId);
+      formData.append("form_data", JSON.stringify(currentAnswers));
       if (token) {
         formData.append("token", token);
       }
@@ -249,6 +367,25 @@ export default function DigitalFormView({
         </div>
       )}
 
+      {/* Notice banner when previous data was loaded */}
+      {isPreviousDataLoaded && (
+        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs sm:text-sm flex items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-amber-600" />
+            <span>
+              <strong>נתונים שמולאו בעבר נטענו לטופס זה.</strong> באפשרותך לערוך ולתקן את השדות, לחתום מחדש ולשמור את הטופס המעודכן.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsPreviousDataLoaded(false)}
+            className="text-amber-700 hover:text-amber-900 text-xs underline font-semibold flex-shrink-0"
+          >
+            הבנתי
+          </button>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Printable Form Container - Captured by html2canvas */}
         <div
@@ -257,7 +394,7 @@ export default function DigitalFormView({
           dir="rtl"
         >
           {/* Formal Authentic Government Header with Official Logos */}
-          <div className="border-b-2 border-slate-900 pb-5 space-y-4">
+          <div className="pdf-section border-b-2 border-slate-900 pb-5 space-y-4" data-pdf-section="header">
             <div className="flex items-center justify-between">
               {/* Right Side: gov.il Logo and Ministry Department */}
               <div className="flex items-center gap-3">
@@ -305,7 +442,7 @@ export default function DigitalFormView({
           </div>
 
           {/* Candidate Profile Details Summary Box */}
-          <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 space-y-3">
+          <div className="pdf-section bg-slate-50 rounded-xl p-5 border border-slate-200 space-y-3" data-pdf-section="candidate-details">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
               פרטי המועמד/ת והשיוך
             </h2>
@@ -422,50 +559,52 @@ export default function DigitalFormView({
             />
           )}
 
-          {/* Legal Acknowledgement Checkbox */}
-          <div className="pt-4 border-t border-slate-200">
-            <label className="flex items-start gap-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={agreeTerms}
-                onChange={(e) => setAgreeTerms(e.target.checked)}
-                className="mt-1 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-xs text-slate-700 leading-relaxed font-medium">
-                הנני מאשר/ת בחתימתי כי קראתי בעיון את כל סעיפי המסמך, הבנתי את תוכנו ומשמעותו המשפטית,
-                והפרטים שנמסרו על ידי נכונים ומלאים.
-              </span>
-            </label>
-          </div>
-
-          {/* Digital Signature Area */}
-          <div className="pt-2">
-            <SignaturePad
-              onSignatureChange={setSignatureDataUrl}
-              signerName={candidate.full_name}
-            />
-          </div>
-
-          {/* Formal Authentic Government Footer */}
-          <div className="pt-6 border-t-2 border-slate-900 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-600 gap-3">
-            <div className="text-right">
-              <span>אוצר ברשת: </span>
-              <span className="font-mono text-blue-700 font-semibold">www.mof.gov.il</span>
-              <span className="mx-1.5">|</span>
-              <span>רח' יפו 234 ירושלים</span>
+          {/* Signature and Legal Declaration Section */}
+          <div className="pdf-section pt-4 border-t border-slate-200 space-y-6" data-pdf-section="signature-footer">
+            <div>
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={agreeTerms}
+                  onChange={(e) => setAgreeTerms(e.target.checked)}
+                  className="mt-1 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-xs text-slate-700 leading-relaxed font-medium">
+                  הנני מאשר/ת בחתימתי כי קראתי בעיון את כל סעיפי המסמך, הבנתי את תוכנו ומשמעותו המשפטית,
+                  והפרטים שנמסרו על ידי נכונים ומלאים.
+                </span>
+              </label>
             </div>
-            <div className="flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/logos/gov_il_logo.jpg"
-                alt="gov.il"
-                className="h-6 w-auto object-contain opacity-80"
+
+            {/* Digital Signature Area */}
+            <div>
+              <SignaturePad
+                onSignatureChange={setSignatureDataUrl}
+                signerName={candidate.full_name}
               />
             </div>
-            <div className="text-left font-mono">
-              <span>טל': 02-5012401</span>
-              <span className="mx-1.5">|</span>
-              <span>שער הממשלה: www.gov.il</span>
+
+            {/* Formal Authentic Government Footer */}
+            <div className="pt-6 border-t-2 border-slate-900 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-600 gap-3">
+              <div className="text-right">
+                <span>אוצר ברשת: </span>
+                <span className="font-mono text-blue-700 font-semibold">www.mof.gov.il</span>
+                <span className="mx-1.5">|</span>
+                <span>רח' יפו 234 ירושלים</span>
+              </div>
+              <div className="flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logos/gov_il_logo.jpg"
+                  alt="gov.il"
+                  className="h-6 w-auto object-contain opacity-80"
+                />
+              </div>
+              <div className="text-left font-mono">
+                <span>טל': 02-5012401</span>
+                <span className="mx-1.5">|</span>
+                <span>שער הממשלה: www.gov.il</span>
+              </div>
             </div>
           </div>
         </div>
@@ -569,13 +708,13 @@ function DocClausesOnly({
   candidate?: CandidateData;
 }) {
   return (
-    <div className="space-y-4 text-sm leading-relaxed border border-slate-200 rounded-xl p-6 bg-slate-50/40">
+    <div className="pdf-section space-y-4 text-sm leading-relaxed border border-slate-200 rounded-xl p-6 bg-slate-50/40" data-pdf-section="clauses">
       <h3 className="font-bold text-slate-900 text-base border-b pb-2">
         סעיפי ההצהרה והתנאים
       </h3>
       <div className="space-y-3 text-slate-700 text-xs sm:text-sm">
         {docInfo.fullContent.map((clause, idx) => (
-          <p key={idx} className="leading-relaxed">
+          <p key={idx} className="pdf-section leading-relaxed" data-pdf-section={`clause-${idx}`}>
             {clause}
           </p>
         ))}
@@ -627,7 +766,7 @@ function Doc1PersonalQuestionnaire({
   return (
     <div className="space-y-6">
       {/* Questionnaire Instructions & Legal Clauses */}
-      <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-4 space-y-2 text-xs text-blue-900">
+      <div className="pdf-section bg-blue-50/60 border border-blue-200 rounded-xl p-4 space-y-2 text-xs text-blue-900" data-pdf-section="instructions">
         <h4 className="font-bold text-sm text-blue-950">הוראות מילוי והצהרה:</h4>
         {docInfo.fullContent.map((clause: string, i: number) => (
           <p key={i} className="leading-relaxed">
@@ -637,7 +776,7 @@ function Doc1PersonalQuestionnaire({
       </div>
 
       {/* Section 1: Personal Details */}
-      <div className="border border-slate-200 rounded-xl p-5 space-y-4">
+      <div className="pdf-section border border-slate-200 rounded-xl p-5 space-y-4" data-pdf-section="part-a">
         <h3 className="font-bold text-slate-900 text-base border-b pb-2">
           חלק א': פרטים אישיים
         </h3>
@@ -711,7 +850,7 @@ function Doc1PersonalQuestionnaire({
       </div>
 
       {/* Section 2: Military / National Service */}
-      <div className="border border-slate-200 rounded-xl p-5 space-y-4">
+      <div className="pdf-section border border-slate-200 rounded-xl p-5 space-y-4" data-pdf-section="part-b">
         <h3 className="font-bold text-slate-900 text-base border-b pb-2">
           חלק ב': שירות צבאי / לאומי / פטור
         </h3>
@@ -775,7 +914,7 @@ function Doc1PersonalQuestionnaire({
       </div>
 
       {/* Section 3: Education */}
-      <div className="border border-slate-200 rounded-xl p-5 space-y-4">
+      <div className="pdf-section border border-slate-200 rounded-xl p-5 space-y-4" data-pdf-section="part-c">
         <h3 className="font-bold text-slate-900 text-base border-b pb-2">
           חלק ג': השכלה והכשרה מקצועית
         </h3>
@@ -804,7 +943,7 @@ function Doc1PersonalQuestionnaire({
       </div>
 
       {/* Section 4: Employment History */}
-      <div className="border border-slate-200 rounded-xl p-5 space-y-4">
+      <div className="pdf-section border border-slate-200 rounded-xl p-5 space-y-4" data-pdf-section="part-d">
         <h3 className="font-bold text-slate-900 text-base border-b pb-2">
           חלק ד': תעסוקה ב-5 השנים האחרונות
         </h3>
@@ -833,7 +972,7 @@ function Doc1PersonalQuestionnaire({
       </div>
 
       {/* Section 5: References */}
-      <div className="border border-slate-200 rounded-xl p-5 space-y-4">
+      <div className="pdf-section border border-slate-200 rounded-xl p-5 space-y-4" data-pdf-section="part-e">
         <h3 className="font-bold text-slate-900 text-base border-b pb-2">
           חלק ה': ממליצים (מכירים לפחות 3 שנים, לא בני משפחה)
         </h3>
@@ -878,7 +1017,7 @@ function Doc4CriminalRecordConsent({
   docInfo,
 }: any) {
   return (
-    <div className="space-y-4 text-sm leading-relaxed border border-slate-200 rounded-xl p-6 bg-slate-50/40">
+    <div className="pdf-section space-y-4 text-sm leading-relaxed border border-slate-200 rounded-xl p-6 bg-slate-50/40" data-pdf-section="consent-form">
       <h3 className="font-bold text-slate-900 text-base border-b pb-2">
         כתב הסכמה למסירת מידע מן המרשם הפלילי (ויתור סודיות)
       </h3>
@@ -944,7 +1083,7 @@ function Doc9SmartCardRequest({
       </div>
 
       {/* Underlined fields table/rows matching original document */}
-      <div className="space-y-4 bg-slate-50/60 p-6 rounded-2xl border border-slate-200">
+      <div className="pdf-section space-y-4 bg-slate-50/60 p-6 rounded-2xl border border-slate-200" data-pdf-section="fields-table">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
           <div>
             <label className="font-bold text-slate-700 block mb-1">שם פרטי ומשפחה:</label>
@@ -1030,7 +1169,7 @@ function Doc9SmartCardRequest({
       </div>
 
       {/* Candidate Declaration Section */}
-      <div className="border border-slate-200 rounded-xl p-5 bg-white space-y-2">
+      <div className="pdf-section border border-slate-200 rounded-xl p-5 bg-white space-y-2" data-pdf-section="candidate-decl">
         <h4 className="font-black text-sm text-slate-900 border-b pb-1">
           הצהרת מבקש/ת התעודה
         </h4>
@@ -1046,7 +1185,7 @@ function Doc9SmartCardRequest({
       </div>
 
       {/* Unit Representative Declaration Section */}
-      <div className="border border-slate-200 rounded-xl p-5 bg-white space-y-3">
+      <div className="pdf-section border border-slate-200 rounded-xl p-5 bg-white space-y-3" data-pdf-section="rep-decl">
         <h4 className="font-black text-sm text-slate-900 border-b pb-1">
           הצהרת נציג היחידה / מנהל פרויקט
         </h4>

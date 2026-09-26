@@ -144,7 +144,8 @@ export default function IdCardUploadCard({
 
         const ext = getExtension(item.file.name);
         const suffix = stagedFiles.length > 1 ? `_חלק_${i + 1}` : "";
-        const customName = `צילום תעודת זהות${suffix} - ${candidate.full_name}${ext}`;
+        const cleanId = candidate.id_number ? ` - ${candidate.id_number}` : "";
+        const customName = `צילום תעודת זהות${suffix} - ${candidate.full_name}${cleanId}${ext}`;
         formData.append("custom_file_name", customName);
 
         const res = await fetch("/api/documents/upload", {

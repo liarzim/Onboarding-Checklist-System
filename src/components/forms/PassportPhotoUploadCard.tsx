@@ -133,7 +133,8 @@ export default function PassportPhotoUploadCard({
       }
 
       const ext = getExtension(stagedPhoto.file.name);
-      const customName = `תמונת פספורט - ${candidate.full_name}${ext}`;
+      const cleanId = candidate.id_number ? ` - ${candidate.id_number}` : "";
+      const customName = `תמונת פספורט - ${candidate.full_name}${cleanId}${ext}`;
       formData.append("custom_file_name", customName);
 
       const res = await fetch("/api/documents/upload", {

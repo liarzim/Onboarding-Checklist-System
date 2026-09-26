@@ -637,7 +637,7 @@ export class SheetsRepository {
 
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A2:H`,
+        range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A2:I`,
       });
 
       const rows = response.data.values || [];
@@ -653,6 +653,7 @@ export class SheetsRepository {
           file_drive_id: row[5] ? String(row[5]) : null,
           file_drive_url: row[6] ? String(row[6]) : null,
           updated_at: String(row[7] || new Date().toISOString()),
+          form_data: row[8] ? String(row[8]) : null,
         }));
     } catch {
       // Ignore and fallback to testStore
@@ -770,6 +771,7 @@ export class SheetsRepository {
       file_name?: string | null;
       file_drive_id?: string | null;
       file_drive_url?: string | null;
+      form_data?: string | null;
     }
   ): Promise<void> {
     const now = new Date().toISOString();
@@ -785,6 +787,7 @@ export class SheetsRepository {
         file_name: update.file_name ?? testStore.checklistItems[itemIndex].file_name,
         file_drive_id: update.file_drive_id ?? testStore.checklistItems[itemIndex].file_drive_id,
         file_drive_url: update.file_drive_url ?? testStore.checklistItems[itemIndex].file_drive_url,
+        form_data: update.form_data !== undefined ? update.form_data : testStore.checklistItems[itemIndex].form_data,
         updated_at: now,
       };
     } else {
@@ -796,6 +799,7 @@ export class SheetsRepository {
         file_name: update.file_name || null,
         file_drive_id: update.file_drive_id || null,
         file_drive_url: update.file_drive_url || null,
+        form_data: update.form_data || null,
         updated_at: now,
       });
     }
@@ -807,7 +811,7 @@ export class SheetsRepository {
 
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A2:H`,
+        range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A2:I`,
       });
 
       const rows = response.data.values || [];
@@ -828,11 +832,12 @@ export class SheetsRepository {
           update.file_drive_id ?? currentRow[5] ?? "",
           update.file_drive_url ?? currentRow[6] ?? "",
           now,
+          update.form_data !== undefined ? (update.form_data || "") : (currentRow[8] || ""),
         ];
 
         await sheets.spreadsheets.values.update({
           spreadsheetId,
-          range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A${sheetRowNumber}:H${sheetRowNumber}`,
+          range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A${sheetRowNumber}:I${sheetRowNumber}`,
           valueInputOption: "USER_ENTERED",
           requestBody: {
             values: [updatedRow],
@@ -848,11 +853,12 @@ export class SheetsRepository {
           update.file_drive_id || "",
           update.file_drive_url || "",
           now,
+          update.form_data || "",
         ];
 
         await sheets.spreadsheets.values.append({
           spreadsheetId,
-          range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A:H`,
+          range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A:I`,
           valueInputOption: "USER_ENTERED",
           insertDataOption: "INSERT_ROWS",
           requestBody: {
@@ -863,6 +869,14 @@ export class SheetsRepository {
     } catch (err) {
       console.warn("Sheets updateChecklistItem offline fallback:", err);
     }
+  }
+
+  /**
+   * Retrieves a single checklist item for a candidate and doc type.
+   */
+  async getChecklistItem(candidate_id: string, doc_type_id: string): Promise<ChecklistItem | null> {
+    const list = await this.getChecklist(candidate_id);
+    return list.find((item) => item.doc_type_id === doc_type_id) || null;
   }
 
   /**

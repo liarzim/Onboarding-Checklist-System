@@ -38,6 +38,7 @@ export const ChecklistItemSchema = z.object({
   file_name: z.string().nullable().optional(),
   file_drive_id: z.string().nullable().optional(),
   file_drive_url: z.string().nullable().optional(),
+  form_data: z.string().nullable().optional(),
   updated_at: z.string(),
 });
 

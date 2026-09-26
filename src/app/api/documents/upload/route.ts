@@ -55,6 +55,7 @@ export async function POST(request: Request) {
     const token =
       (formData.get("token") as string | null) ||
       request.headers.get("x-candidate-token");
+    const rawFormData = formData.get("form_data") as string | null;
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json(
@@ -235,6 +236,7 @@ export async function POST(request: Request) {
     const customFileName = formData.get("custom_file_name") as string | null;
     const cleanDocName = sanitizeFileNamePart(docType.doc_name);
     const cleanCandidateName = sanitizeFileNamePart(candidate.full_name);
+    const cleanIdNumber = sanitizeFileNamePart(candidate.id_number || "");
     const cleanProjectName = sanitizeFileNamePart(candidate.project_id || "פרויקט");
     const cleanCompanyName = sanitizeFileNamePart(vendorCompanyName || "ספק");
 
@@ -242,11 +244,17 @@ export async function POST(request: Request) {
     if (customFileName) {
       standardizedFileName = sanitizeFileNamePart(customFileName);
     } else if (docTypeId === "doc_11") {
-      standardizedFileName = `תמונת פספורט - ${cleanCandidateName}${ext}`;
+      standardizedFileName = cleanIdNumber
+        ? `תמונת פספורט - ${cleanCandidateName} - ${cleanIdNumber}${ext}`
+        : `תמונת פספורט - ${cleanCandidateName}${ext}`;
     } else if (docTypeId === "doc_10") {
-      standardizedFileName = `צילום תעודת זהות - ${cleanCandidateName}${ext}`;
+      standardizedFileName = cleanIdNumber
+        ? `צילום תעודת זהות - ${cleanCandidateName} - ${cleanIdNumber}${ext}`
+        : `צילום תעודת זהות - ${cleanCandidateName}${ext}`;
     } else {
-      standardizedFileName = `${cleanDocName}.${cleanCandidateName}.${cleanProjectName}.${cleanCompanyName}.pdf`;
+      standardizedFileName = cleanIdNumber
+        ? `${cleanDocName}.${cleanCandidateName}.${cleanIdNumber}.${cleanProjectName}.${cleanCompanyName}.pdf`
+        : `${cleanDocName}.${cleanCandidateName}.${cleanProjectName}.${cleanCompanyName}.pdf`;
     }
 
     // 6. Upload to Candidate Google Drive Folder with overwrite
@@ -275,6 +283,7 @@ export async function POST(request: Request) {
       file_name: standardizedFileName,
       file_drive_id: fileId,
       file_drive_url: webViewLink,
+      form_data: rawFormData || undefined,
     });
 
     // 8. Append Event to Audit Log
