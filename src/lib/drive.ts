@@ -12,7 +12,7 @@ import { syncSystemSettingsToDynamicConfig } from "./repositories/sheetsReposito
  * Ensures Google credentials and OAuth refresh token are synchronized from Google Sheets
  * if not present in memory or environment variables, avoiding Service Account Drive quota limits.
  */
-async function ensureAuthReady(): Promise<void> {
+export async function ensureAuthReady(): Promise<void> {
   const env = getEnv();
   const config = getDynamicGoogleConfig();
   if (!env.GOOGLE_REFRESH_TOKEN && !config.oauth_refresh_token) {

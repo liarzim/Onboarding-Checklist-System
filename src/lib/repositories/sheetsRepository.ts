@@ -1435,6 +1435,48 @@ export class SheetsRepository {
   }
 
   /**
+   * Ensures that a specific sheet tab exists in the Google Spreadsheet.
+   * If it does not exist, creates it using batchUpdate addSheet.
+   */
+  async ensureTabExists(tabName: string): Promise<boolean> {
+    const spreadsheetId = this.getSpreadsheetId();
+    if (!spreadsheetId) return false;
+
+    try {
+      const sheets = getSheetsClient();
+      const meta = await sheets.spreadsheets.get({
+        spreadsheetId,
+        fields: "sheets.properties.title",
+      });
+
+      const existingTabs = (meta.data.sheets || []).map(
+        (s) => s.properties?.title || ""
+      );
+
+      if (!existingTabs.includes(tabName)) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [
+              {
+                addSheet: {
+                  properties: {
+                    title: tabName,
+                  },
+                },
+              },
+            ],
+          },
+        });
+      }
+      return true;
+    } catch (err) {
+      console.warn(`Could not ensure tab "${tabName}" exists:`, err);
+      return false;
+    }
+  }
+
+  /**
    * Sets a key-value pair in the SystemSettings sheet tab.
    * Auto-creates the tab with headers if missing.
    */
@@ -1447,8 +1489,10 @@ export class SheetsRepository {
       const trimmedKey = key.trim();
       const trimmedValue = value.trim();
 
+      // 1. Ensure the SystemSettings tab exists in the spreadsheet
+      await this.ensureTabExists(SHEET_NAMES.SYSTEM_SETTINGS);
+
       let rows: any[][] = [];
-      let tabExists = true;
       try {
         const response = await sheets.spreadsheets.values.get({
           spreadsheetId,
@@ -1456,7 +1500,7 @@ export class SheetsRepository {
         });
         rows = response.data.values || [];
       } catch {
-        tabExists = false;
+        rows = [];
       }
 
       const existingIndex = rows.findIndex(
@@ -1481,35 +1525,29 @@ export class SheetsRepository {
           },
         });
       } else {
-        if (!tabExists || rows.length === 0) {
-          try {
-            await sheets.spreadsheets.values.append({
-              spreadsheetId,
-              range: `${SHEET_NAMES.SYSTEM_SETTINGS}!A:C`,
-              valueInputOption: "USER_ENTERED",
-              insertDataOption: "INSERT_ROWS",
-              requestBody: {
-                values: [
-                  ["key", "value", "updated_at"],
-                  newRow,
-                ],
-              },
-            });
-            return;
-          } catch {
-            // Fall through to regular append
-          }
+        if (rows.length === 0) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `${SHEET_NAMES.SYSTEM_SETTINGS}!A1:C2`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: {
+              values: [
+                ["key", "value", "updated_at"],
+                newRow,
+              ],
+            },
+          });
+        } else {
+          await sheets.spreadsheets.values.append({
+            spreadsheetId,
+            range: `${SHEET_NAMES.SYSTEM_SETTINGS}!A:C`,
+            valueInputOption: "USER_ENTERED",
+            insertDataOption: "INSERT_ROWS",
+            requestBody: {
+              values: [newRow],
+            },
+          });
         }
-
-        await sheets.spreadsheets.values.append({
-          spreadsheetId,
-          range: `${SHEET_NAMES.SYSTEM_SETTINGS}!A:C`,
-          valueInputOption: "USER_ENTERED",
-          insertDataOption: "INSERT_ROWS",
-          requestBody: {
-            values: [newRow],
-          },
-        });
       }
     } catch (err) {
       console.warn("Could not save system setting to Google Sheets:", err);

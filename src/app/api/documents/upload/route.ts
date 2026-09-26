@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getVendorSession } from "@/lib/auth";
 import { assertVendorOwnership, ForbiddenError, NotFoundError } from "@/lib/security";
 import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
-import { uploadFileToCandidateFolder } from "@/lib/drive";
+import { uploadFileToCandidateFolder, ensureAuthReady } from "@/lib/drive";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import type { AuditLogEntry } from "@/types/schema";
 
@@ -27,6 +27,9 @@ function isValidPdfMagicBytes(buffer: Buffer): boolean {
 
 export async function POST(request: Request) {
   try {
+    // Ensure authentication is ready and synced from Google Sheets before accessing sheets or drive
+    await ensureAuthReady();
+
     // 0. Rate Limiting per IP
     const clientIp = getClientIp(request);
     const rateLimit = checkRateLimit(`upload_${clientIp}`, {

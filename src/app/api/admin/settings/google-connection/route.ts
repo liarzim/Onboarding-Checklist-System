@@ -48,6 +48,15 @@ export async function GET() {
     const spreadsheetId = updatedEnv.GOOGLE_SPREADSHEET_ID || "";
     const driveFolderId = updatedEnv.GOOGLE_DRIVE_ROOT_FOLDER_ID || "";
 
+    // Ensure the token and email are safely persisted into SystemSettings sheet tab
+    if (finalRefreshToken) {
+      sheetsRepository.setSystemSetting("oauth_refresh_token", finalRefreshToken).catch(() => {});
+      if (updatedConfig.oauth_email) {
+        sheetsRepository.setSystemSetting("oauth_email", updatedConfig.oauth_email).catch(() => {});
+      }
+      sheetsRepository.setSystemSetting("auth_mode", "oauth").catch(() => {});
+    }
+
     const serviceAccountEmail =
       updatedConfig.service_account_email ||
       updatedEnv.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
