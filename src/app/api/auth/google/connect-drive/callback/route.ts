@@ -4,8 +4,10 @@ import { resetEnvCache } from "@/lib/env";
 import {
   getDynamicGoogleConfig,
   saveDynamicGoogleConfig,
+  setCookieGoogleConfig,
 } from "@/lib/dynamicConfig";
 import { assertAdminRole } from "@/lib/security";
+import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,7 @@ export async function GET(request: Request) {
   const redirectUri = `${baseUrl}/api/auth/google/connect-drive/callback`;
 
   const settingsUrl = new URL("/admin/settings", baseUrl);
+  settingsUrl.searchParams.set("tab", "google");
 
   if (error || !code) {
     settingsUrl.searchParams.set(
@@ -52,11 +55,25 @@ export async function GET(request: Request) {
       oauth_email: email,
     });
 
+    // Permanently persist token to Google Sheets SystemSettings tab
+    if (refreshToken) {
+      await sheetsRepository.setSystemSetting("oauth_refresh_token", refreshToken);
+      await sheetsRepository.setSystemSetting("oauth_email", email);
+      await sheetsRepository.setSystemSetting("auth_mode", "oauth");
+    }
+
     resetEnvCache();
     resetGoogleClients();
 
     settingsUrl.searchParams.set("googleSuccess", `חשבון Google (${email}) חובר בהצלחה`);
-    return NextResponse.redirect(settingsUrl);
+    const response = NextResponse.redirect(settingsUrl);
+    setCookieGoogleConfig(response, {
+      ...currentConfig,
+      auth_mode: "oauth",
+      oauth_refresh_token: refreshToken,
+      oauth_email: email,
+    });
+    return response;
   } catch (err: any) {
     const message =
       err instanceof Error ? err.message : "שגיאה לא צפויה בשמירת חיבור Google";

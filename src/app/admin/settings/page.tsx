@@ -17,6 +17,7 @@ import {
   MoveDown,
   ExternalLink,
   ShieldAlert,
+  ShieldCheck,
   UserPlus,
   Copy,
   Check,
@@ -129,6 +130,9 @@ export default function AdminSettingsPage() {
   const [googlePrivateKeyConfigured, setGooglePrivateKeyConfigured] = useState(false);
   const [isOauthConnected, setIsOauthConnected] = useState(false);
   const [oauthEmail, setOauthEmail] = useState("");
+  const [oauthRefreshToken, setOauthRefreshToken] = useState("");
+  const [isPermanentEnvConfigured, setIsPermanentEnvConfigured] = useState(false);
+  const [copiedRefreshToken, setCopiedRefreshToken] = useState(false);
   const [googleSpreadsheetId, setGoogleSpreadsheetId] = useState("");
   const [googleDriveFolderId, setGoogleDriveFolderId] = useState("");
   const [googleSpreadsheetUrl, setGoogleSpreadsheetUrl] = useState("");
@@ -312,6 +316,8 @@ export default function AdminSettingsPage() {
         setGooglePrivateKeyConfigured(Boolean(json.data.isPrivateKeyConfigured));
         setIsOauthConnected(Boolean(json.data.isOauthConnected));
         setOauthEmail(json.data.oauthEmail || "");
+        setOauthRefreshToken(json.data.oauthRefreshToken || "");
+        setIsPermanentEnvConfigured(Boolean(json.data.isPermanentEnvConfigured));
         setGoogleSpreadsheetId(sheetId);
         setGoogleDriveFolderId(folderId);
         setGoogleSpreadsheetUrl(
@@ -328,6 +334,13 @@ export default function AdminSettingsPage() {
     } catch {
       // Ignore
     }
+  }
+
+  function handleCopyRefreshToken() {
+    if (!oauthRefreshToken) return;
+    navigator.clipboard.writeText(oauthRefreshToken);
+    setCopiedRefreshToken(true);
+    setTimeout(() => setCopiedRefreshToken(false), 3000);
   }
 
   async function handleSaveServiceAccountJson(e: React.FormEvent) {
@@ -2012,13 +2025,71 @@ export default function AdminSettingsPage() {
                         </div>
 
                         {isOauthConnected ? (
-                          <div className="space-y-1.5">
-                            <p className="text-xs text-slate-600">
-                              המערכת מחוברת לחשבון Google של האדמין ומורשית לנהל קבצים וגיליונות ב-Drive:
-                            </p>
-                            <p className="text-xs font-mono font-bold text-blue-700 bg-white p-2 rounded border border-slate-200 truncate">
-                              {oauthEmail}
-                            </p>
+                          <div className="space-y-3">
+                            <div>
+                              <p className="text-xs text-slate-600 mb-1">
+                                המערכת מחוברת לחשבון Google של האדמין ומורשית לנהל קבצים וגיליונות ב-Drive:
+                              </p>
+                              <p className="text-xs font-mono font-bold text-blue-700 bg-white p-2 rounded border border-slate-200 truncate">
+                                {oauthEmail}
+                              </p>
+                            </div>
+
+                            {/* PERMANENT CONNECTION STATUS */}
+                            <div className="p-2.5 rounded-lg border bg-white space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>סטטוס עמידות חיבור 24/7:</span>
+                                </span>
+                                {isPermanentEnvConfigured ? (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    קבוע בשרת (משתנה סביבה)
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                                    נשמר אוטומטית בגיליון
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-500 leading-relaxed">
+                                החיבור פועל ברקע 24/7 ללא צורך בהתחברות אדמין, וההרשאות מאפשרות העלאת מסמכים ל-Drive ללא מגבלות מכסה.
+                              </p>
+
+                              {oauthRefreshToken && (
+                                <div className="pt-1.5 border-t border-slate-100">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[10px] font-semibold text-slate-600">
+                                      מפתח רענון קבוע (GOOGLE_REFRESH_TOKEN):
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={handleCopyRefreshToken}
+                                      className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded transition"
+                                    >
+                                      {copiedRefreshToken ? (
+                                        <>
+                                          <Check className="w-3 h-3 text-emerald-600" />
+                                          <span className="text-emerald-700">הועתק!</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Copy className="w-3 h-3" />
+                                          <span>העתק Token ל-Vercel</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                  <input
+                                    type="text"
+                                    readOnly
+                                    value={oauthRefreshToken}
+                                    dir="ltr"
+                                    className="w-full text-[10px] font-mono bg-slate-50 border border-slate-200 rounded px-2 py-1 text-slate-600 select-all"
+                                  />
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ) : (
                           <p className="text-xs text-slate-600 leading-relaxed">
@@ -2481,11 +2552,12 @@ export default function AdminSettingsPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            const snippet = `GOOGLE_SPREADSHEET_ID=${googleSpreadsheetId}\nGOOGLE_DRIVE_ROOT_FOLDER_ID=${googleDriveFolderId}`;
+                            const refreshPart = oauthRefreshToken ? `\nGOOGLE_REFRESH_TOKEN=${oauthRefreshToken}` : "";
+                            const snippet = `GOOGLE_SPREADSHEET_ID=${googleSpreadsheetId}\nGOOGLE_DRIVE_ROOT_FOLDER_ID=${googleDriveFolderId}${refreshPart}`;
                             navigator.clipboard.writeText(snippet);
                             setMessage({
                               type: "success",
-                              text: "משתני הסביבה הועתקו ללוח! ניתן להדביקם ב-Settings > Environment Variables ב-Vercel.",
+                              text: "משתני הסביבה (כולל מפתח רענון קבוע) הועתקו ללוח! ניתן להדביקם ב-Settings > Environment Variables ב-Vercel.",
                             });
                           }}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-emerald-100/50 border border-emerald-300 rounded-lg text-emerald-800 font-bold transition text-xs shadow-xs self-start sm:self-auto"

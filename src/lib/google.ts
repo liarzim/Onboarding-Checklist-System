@@ -16,15 +16,17 @@ export function getGoogleAuth(): any {
     const dynamicConfig = getDynamicGoogleConfig();
     const env = getEnv();
 
-    // Check if OAuth mode is active and refresh token is configured
-    if (
-      (dynamicConfig.auth_mode === "oauth" && dynamicConfig.oauth_refresh_token) ||
-      (!env.GOOGLE_PRIVATE_KEY && dynamicConfig.oauth_refresh_token)
-    ) {
+    const refreshToken =
+      (env.GOOGLE_REFRESH_TOKEN || "").trim() ||
+      (dynamicConfig.oauth_refresh_token || "").trim();
+
+    // 1. If OAuth refresh token is available (from env or dynamic config), use it permanently!
+    // This provides full personal Google Drive storage quota (15GB+) and never hits Service Account quota limits.
+    if (refreshToken && refreshToken.length > 5) {
       const { clientId, clientSecret } = getOAuth2Credentials();
       const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
       oauth2Client.setCredentials({
-        refresh_token: dynamicConfig.oauth_refresh_token,
+        refresh_token: refreshToken,
       });
       authClient = oauth2Client;
       return authClient;

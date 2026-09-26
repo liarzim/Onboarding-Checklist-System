@@ -44,6 +44,20 @@ export const envSchema = z.object({
     .optional()
     .default("")
     .transform((val) => extractDriveFolderId(val)),
+  GOOGLE_REFRESH_TOKEN: z
+    .string()
+    .optional()
+    .default("")
+    .transform((val) => {
+      let cleaned = (val || "").trim();
+      if (
+        (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+        (cleaned.startsWith("'") && cleaned.endsWith("'"))
+      ) {
+        cleaned = cleaned.slice(1, -1).trim();
+      }
+      return cleaned.replace(/['"]/g, "");
+    }),
   JWT_SECRET: z
     .string()
     .optional()
@@ -75,6 +89,10 @@ export function getEnv(): Env {
 
   const merged = {
     ...process.env,
+    GOOGLE_REFRESH_TOKEN:
+      process.env.GOOGLE_REFRESH_TOKEN ||
+      dynamicConfig.oauth_refresh_token ||
+      "",
     GOOGLE_SERVICE_ACCOUNT_EMAIL:
       dynamicConfig.service_account_email ||
       process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||

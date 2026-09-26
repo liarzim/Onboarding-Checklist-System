@@ -70,7 +70,7 @@ export async function GET(request: Request) {
     try {
       const { exchangeCodeForDriveTokens, resetGoogleClients } = await import("@/lib/google");
       const { resetEnvCache } = await import("@/lib/env");
-      const { saveDynamicGoogleConfig, getDynamicGoogleConfig } = await import("@/lib/dynamicConfig");
+      const { saveDynamicGoogleConfig, getDynamicGoogleConfig, setCookieGoogleConfig } = await import("@/lib/dynamicConfig");
 
       const tokenData = await exchangeCodeForDriveTokens(code, redirectUri);
       const email = tokenData.email.toLowerCase().trim();
@@ -85,13 +85,27 @@ export async function GET(request: Request) {
         oauth_email: email,
       });
 
+      // Permanently persist token to Google Sheets SystemSettings tab
+      if (refreshToken) {
+        await sheetsRepository.setSystemSetting("oauth_refresh_token", refreshToken);
+        await sheetsRepository.setSystemSetting("oauth_email", email);
+        await sheetsRepository.setSystemSetting("auth_mode", "oauth");
+      }
+
       resetEnvCache();
       resetGoogleClients();
 
       const settingsUrl = new URL("/admin/settings", baseUrl);
       settingsUrl.searchParams.set("tab", "google");
       settingsUrl.searchParams.set("googleSuccess", `חשבון Google (${email}) חובר בהצלחה`);
-      return NextResponse.redirect(settingsUrl);
+      const response = NextResponse.redirect(settingsUrl);
+      setCookieGoogleConfig(response, {
+        ...currentConfig,
+        auth_mode: "oauth",
+        oauth_refresh_token: refreshToken,
+        oauth_email: email,
+      });
+      return response;
     } catch (err: any) {
       const settingsUrl = new URL("/admin/settings", baseUrl);
       settingsUrl.searchParams.set("tab", "google");

@@ -7,6 +7,7 @@ import {
   getDynamicGoogleConfig,
 } from "@/lib/dynamicConfig";
 import { assertAdminRole } from "@/lib/security";
+import { syncSystemSettingsToDynamicConfig } from "@/lib/repositories/sheetsRepository";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +16,21 @@ export async function POST(request: Request) {
     await assertAdminRole();
 
     const body = await request.json().catch(() => ({}));
-    const env = getEnv();
-    const dynamicConfig = getDynamicGoogleConfig();
+    let env = getEnv();
+    let dynamicConfig = getDynamicGoogleConfig();
+
+    let refreshToken =
+      (env.GOOGLE_REFRESH_TOKEN || "").trim() ||
+      (dynamicConfig.oauth_refresh_token || "").trim();
+
+    if (!refreshToken) {
+      await syncSystemSettingsToDynamicConfig();
+      env = getEnv();
+      dynamicConfig = getDynamicGoogleConfig();
+      refreshToken =
+        (env.GOOGLE_REFRESH_TOKEN || "").trim() ||
+        (dynamicConfig.oauth_refresh_token || "").trim();
+    }
 
     const targetSpreadsheetId = extractSpreadsheetId(
       body.spreadsheetId || dynamicConfig.spreadsheet_id || env.GOOGLE_SPREADSHEET_ID || ""
@@ -25,7 +39,7 @@ export async function POST(request: Request) {
       body.driveFolderId || dynamicConfig.drive_folder_id || env.GOOGLE_DRIVE_ROOT_FOLDER_ID || ""
     );
 
-    const isOauth = Boolean(dynamicConfig.oauth_refresh_token);
+    const isOauth = Boolean(refreshToken);
     const serviceAccountEmail = dynamicConfig.service_account_email || env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "";
     const privateKey = dynamicConfig.service_account_private_key || env.GOOGLE_PRIVATE_KEY || "";
     const hasServiceAccount = Boolean(privateKey && privateKey.length > 50);

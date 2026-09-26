@@ -5,7 +5,20 @@ import os from "os";
 import { getDriveClient } from "./google";
 import { getEnv } from "./env";
 import { saveLocalTestUpload } from "./testStore";
-import { extractDriveFolderId } from "./dynamicConfig";
+import { extractDriveFolderId, getDynamicGoogleConfig } from "./dynamicConfig";
+import { syncSystemSettingsToDynamicConfig } from "./repositories/sheetsRepository";
+
+/**
+ * Ensures Google credentials and OAuth refresh token are synchronized from Google Sheets
+ * if not present in memory or environment variables, avoiding Service Account Drive quota limits.
+ */
+async function ensureAuthReady(): Promise<void> {
+  const env = getEnv();
+  const config = getDynamicGoogleConfig();
+  if (!env.GOOGLE_REFRESH_TOKEN && !config.oauth_refresh_token) {
+    await syncSystemSettingsToDynamicConfig();
+  }
+}
 
 /**
  * Creates a dedicated candidate folder under the root onboarding Drive folder.
@@ -15,6 +28,8 @@ export async function createCandidateFolder(
   candidateName: string,
   candidateId: string
 ): Promise<string> {
+  await ensureAuthReady();
+
   // Sanitize candidateName and candidateId to prevent injection in naming
   const safeName = candidateName.replace(/[/\\:*?"<>|]/g, "").trim();
   const safeId = candidateId.replace(/[/\\:*?"<>|]/g, "").trim();
@@ -78,6 +93,7 @@ export async function ensureCandidateFolder(
   candidateId: string,
   existingFolderId?: string | null
 ): Promise<string> {
+  await ensureAuthReady();
   const env = getEnv();
   const isDriveConfigured = Boolean(
     (env.GOOGLE_PRIVATE_KEY && env.GOOGLE_PRIVATE_KEY.length > 50) ||
@@ -144,6 +160,7 @@ export async function uploadFileToCandidateFolder(
   mimeType: string = "application/pdf",
   candidateContext?: { candidate_id?: string; full_name?: string }
 ): Promise<{ fileId: string; webViewLink: string; resolvedFolderId?: string }> {
+  await ensureAuthReady();
   const env = getEnv();
   const isDriveConfigured = Boolean(
     (env.GOOGLE_PRIVATE_KEY && env.GOOGLE_PRIVATE_KEY.length > 50) ||
@@ -265,6 +282,7 @@ export async function deleteCandidateFolder(
   folderId?: string | null,
   candidateId?: string | null
 ): Promise<void> {
+  await ensureAuthReady();
   const drive = getDriveClient();
   const env = getEnv();
   const rootFolderId = extractDriveFolderId((env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "").trim());
@@ -361,6 +379,7 @@ export async function deleteCandidateFolder(
 export async function cleanupOrphanedDriveFolders(
   activeCandidateIds: string[] = []
 ): Promise<number> {
+  await ensureAuthReady();
   try {
     const drive = getDriveClient();
     const env = getEnv();

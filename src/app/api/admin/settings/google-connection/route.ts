@@ -10,6 +10,10 @@ import {
   parseServiceAccountJson,
 } from "@/lib/dynamicConfig";
 import { assertAdminRole } from "@/lib/security";
+import {
+  sheetsRepository,
+  syncSystemSettingsToDynamicConfig,
+} from "@/lib/repositories/sheetsRepository";
 
 export const dynamic = "force-dynamic";
 
@@ -23,22 +27,42 @@ export async function GET() {
     const env = getEnv();
     const dynamicConfig = getDynamicGoogleConfig();
 
-    const authMode = dynamicConfig.auth_mode || "service_account";
-    const spreadsheetId = env.GOOGLE_SPREADSHEET_ID || "";
-    const driveFolderId = env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "";
+    let refreshToken =
+      (env.GOOGLE_REFRESH_TOKEN || "").trim() ||
+      (dynamicConfig.oauth_refresh_token || "").trim();
+
+    // If refresh token is missing in memory, try loading from Google Sheets SystemSettings tab
+    if (!refreshToken) {
+      await syncSystemSettingsToDynamicConfig();
+    }
+
+    const updatedConfig = getDynamicGoogleConfig();
+    const updatedEnv = getEnv();
+    const finalRefreshToken =
+      (updatedEnv.GOOGLE_REFRESH_TOKEN || "").trim() ||
+      (updatedConfig.oauth_refresh_token || "").trim();
+
+    const authMode = finalRefreshToken
+      ? "oauth"
+      : updatedConfig.auth_mode || "service_account";
+    const spreadsheetId = updatedEnv.GOOGLE_SPREADSHEET_ID || "";
+    const driveFolderId = updatedEnv.GOOGLE_DRIVE_ROOT_FOLDER_ID || "";
 
     const serviceAccountEmail =
-      dynamicConfig.service_account_email ||
-      env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+      updatedConfig.service_account_email ||
+      updatedEnv.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
       "";
 
     const isPrivateKeyConfigured = Boolean(
-      dynamicConfig.service_account_private_key ||
-        (env.GOOGLE_PRIVATE_KEY && env.GOOGLE_PRIVATE_KEY.length > 50)
+      updatedConfig.service_account_private_key ||
+        (updatedEnv.GOOGLE_PRIVATE_KEY && updatedEnv.GOOGLE_PRIVATE_KEY.length > 50)
     );
 
-    const isOauthConnected = Boolean(dynamicConfig.oauth_refresh_token);
-    const oauthEmail = dynamicConfig.oauth_email || "";
+    const isOauthConnected = Boolean(finalRefreshToken);
+    const oauthEmail = updatedConfig.oauth_email || "";
+    const isPermanentEnvConfigured = Boolean(
+      process.env.GOOGLE_REFRESH_TOKEN && process.env.GOOGLE_REFRESH_TOKEN.trim().length > 5
+    );
 
     const spreadsheetUrl = spreadsheetId
       ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
@@ -56,6 +80,8 @@ export async function GET() {
         isPrivateKeyConfigured,
         isOauthConnected,
         oauthEmail,
+        oauthRefreshToken: finalRefreshToken,
+        isPermanentEnvConfigured,
         spreadsheetId,
         driveFolderId,
         spreadsheetUrl,
@@ -65,7 +91,7 @@ export async function GET() {
 
     if (spreadsheetId || driveFolderId) {
       setCookieGoogleConfig(response, {
-        ...dynamicConfig,
+        ...updatedConfig,
         spreadsheet_id: spreadsheetId,
         drive_folder_id: driveFolderId,
       });
@@ -123,14 +149,30 @@ export async function POST(request: Request) {
       updates.oauth_refresh_token = "";
       updates.oauth_email = "";
       updates.auth_mode = "service_account";
+      await sheetsRepository.setSystemSetting("oauth_refresh_token", "");
+      await sheetsRepository.setSystemSetting("oauth_email", "");
+      await sheetsRepository.setSystemSetting("auth_mode", "service_account");
     }
 
-    // 4. Update Spreadsheet and Folder IDs if provided
+    // 4. Update OAuth Refresh Token directly if provided
+    if (body.oauthRefreshToken !== undefined) {
+      updates.oauth_refresh_token = String(body.oauthRefreshToken).trim();
+      updates.auth_mode = "oauth";
+      if (updates.oauth_refresh_token) {
+        await sheetsRepository.setSystemSetting("oauth_refresh_token", updates.oauth_refresh_token);
+        await sheetsRepository.setSystemSetting("auth_mode", "oauth");
+      }
+    }
+
+    // 5. Update Spreadsheet and Folder IDs if provided
     if (body.spreadsheetId !== undefined) {
       updates.spreadsheet_id = extractSpreadsheetId(String(body.spreadsheetId));
     }
     if (body.driveFolderId !== undefined) {
       updates.drive_folder_id = extractDriveFolderId(String(body.driveFolderId));
+      if (updates.drive_folder_id) {
+        await sheetsRepository.setSystemSetting("drive_folder_id", updates.drive_folder_id);
+      }
     }
 
     // Save to dynamic configuration storage
@@ -142,12 +184,15 @@ export async function POST(request: Request) {
 
     const env = getEnv();
     const dynamicConfig = getDynamicGoogleConfig();
+    const finalRefreshToken =
+      (env.GOOGLE_REFRESH_TOKEN || "").trim() ||
+      (dynamicConfig.oauth_refresh_token || "").trim();
 
     const response = NextResponse.json({
       success: true,
       message: "הגדרות החיבור ל-Google עודכנו בהצלחה",
       data: {
-        authMode: dynamicConfig.auth_mode || "service_account",
+        authMode: finalRefreshToken ? "oauth" : dynamicConfig.auth_mode || "service_account",
         serviceAccountEmail:
           dynamicConfig.service_account_email ||
           env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
@@ -156,8 +201,12 @@ export async function POST(request: Request) {
           dynamicConfig.service_account_private_key ||
             (env.GOOGLE_PRIVATE_KEY && env.GOOGLE_PRIVATE_KEY.length > 50)
         ),
-        isOauthConnected: Boolean(dynamicConfig.oauth_refresh_token),
+        isOauthConnected: Boolean(finalRefreshToken),
         oauthEmail: dynamicConfig.oauth_email || "",
+        oauthRefreshToken: finalRefreshToken,
+        isPermanentEnvConfigured: Boolean(
+          process.env.GOOGLE_REFRESH_TOKEN && process.env.GOOGLE_REFRESH_TOKEN.trim().length > 5
+        ),
         spreadsheetId: env.GOOGLE_SPREADSHEET_ID,
         driveFolderId: env.GOOGLE_DRIVE_ROOT_FOLDER_ID,
         spreadsheetUrl: env.GOOGLE_SPREADSHEET_ID

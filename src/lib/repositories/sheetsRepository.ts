@@ -1,6 +1,7 @@
-import { getSheetsClient } from "../google";
+import { getSheetsClient, resetGoogleClients } from "../google";
 import { getEnv, isProduction } from "../env";
 import { loadTestStore, saveTestStore, recordDeletedCandidate } from "../testStore";
+import { saveDynamicGoogleConfig } from "../dynamicConfig";
 import type {
   Candidate,
   ChecklistItem,
@@ -21,6 +22,7 @@ export const SHEET_NAMES = {
   SETTING_STAGES: "SettingStages",
   PROJECTS: "Projects",
   ADMINS: "Admins",
+  SYSTEM_SETTINGS: "SystemSettings",
 } as const;
 
 export const DEFAULT_VENDORS: Vendor[] = [
@@ -1402,6 +1404,144 @@ export class SheetsRepository {
       // Ignore if tab does not exist
     }
   }
+
+  /**
+   * Reads all system settings from the SystemSettings sheet tab.
+   */
+  async getSystemSettings(): Promise<Record<string, string>> {
+    const spreadsheetId = this.getSpreadsheetId();
+    if (!spreadsheetId) return {};
+
+    try {
+      const sheets = getSheetsClient();
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.SYSTEM_SETTINGS}!A2:B`,
+      });
+
+      const rows = response.data.values || [];
+      const settings: Record<string, string> = {};
+      for (const row of rows) {
+        const key = String(row[0] || "").trim();
+        const value = String(row[1] || "").trim();
+        if (key) {
+          settings[key] = value;
+        }
+      }
+      return settings;
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Sets a key-value pair in the SystemSettings sheet tab.
+   * Auto-creates the tab with headers if missing.
+   */
+  async setSystemSetting(key: string, value: string): Promise<void> {
+    const spreadsheetId = this.getSpreadsheetId();
+    if (!spreadsheetId) return;
+
+    try {
+      const sheets = getSheetsClient();
+      const trimmedKey = key.trim();
+      const trimmedValue = value.trim();
+
+      let rows: any[][] = [];
+      let tabExists = true;
+      try {
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: `${SHEET_NAMES.SYSTEM_SETTINGS}!A2:C`,
+        });
+        rows = response.data.values || [];
+      } catch {
+        tabExists = false;
+      }
+
+      const existingIndex = rows.findIndex(
+        (row) => String(row[0] || "").trim() === trimmedKey
+      );
+
+      const now = new Date().toISOString();
+      const newRow = [
+        sanitizeSheetCellValue(trimmedKey),
+        sanitizeSheetCellValue(trimmedValue),
+        now,
+      ];
+
+      if (existingIndex >= 0) {
+        const sheetRowNumber = existingIndex + 2;
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.SYSTEM_SETTINGS}!A${sheetRowNumber}:C${sheetRowNumber}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: [newRow],
+          },
+        });
+      } else {
+        if (!tabExists || rows.length === 0) {
+          try {
+            await sheets.spreadsheets.values.append({
+              spreadsheetId,
+              range: `${SHEET_NAMES.SYSTEM_SETTINGS}!A:C`,
+              valueInputOption: "USER_ENTERED",
+              insertDataOption: "INSERT_ROWS",
+              requestBody: {
+                values: [
+                  ["key", "value", "updated_at"],
+                  newRow,
+                ],
+              },
+            });
+            return;
+          } catch {
+            // Fall through to regular append
+          }
+        }
+
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: `${SHEET_NAMES.SYSTEM_SETTINGS}!A:C`,
+          valueInputOption: "USER_ENTERED",
+          insertDataOption: "INSERT_ROWS",
+          requestBody: {
+            values: [newRow],
+          },
+        });
+      }
+    } catch (err) {
+      console.warn("Could not save system setting to Google Sheets:", err);
+    }
+  }
 }
 
 export const sheetsRepository = new SheetsRepository();
+
+/**
+ * Synchronizes persisted Google configuration from SystemSettings sheet tab to dynamicConfig in memory.
+ * Ensures the OAuth refresh token survives serverless cold starts across any container.
+ */
+let isSyncing = false;
+export async function syncSystemSettingsToDynamicConfig(): Promise<void> {
+  if (isSyncing) return;
+  isSyncing = true;
+  try {
+    const settings = await sheetsRepository.getSystemSettings();
+    if (settings["oauth_refresh_token"]) {
+      saveDynamicGoogleConfig({
+        auth_mode: "oauth",
+        oauth_refresh_token: settings["oauth_refresh_token"],
+        oauth_email: settings["oauth_email"] || "",
+        drive_folder_id: settings["drive_folder_id"],
+      });
+      resetGoogleClients();
+    }
+  } catch (err) {
+    console.warn("Could not sync SystemSettings from Google Sheets:", err);
+  } finally {
+    isSyncing = false;
+  }
+}
+
