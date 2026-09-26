@@ -57,7 +57,11 @@ export async function GET(request: Request) {
       if (item.form_data) {
         try {
           const itemData = JSON.parse(item.form_data);
-          parsedData = { ...parsedData, ...itemData };
+          for (const [k, v] of Object.entries(itemData)) {
+            if (v !== undefined && v !== null && v !== "") {
+              parsedData[k] = v;
+            }
+          }
         } catch {
           // Ignore
         }
@@ -68,7 +72,11 @@ export async function GET(request: Request) {
     if (currentItem?.form_data) {
       try {
         const docSpecific = JSON.parse(currentItem.form_data);
-        parsedData = { ...parsedData, ...docSpecific };
+        for (const [k, v] of Object.entries(docSpecific)) {
+          if (v !== undefined && v !== null && v !== "") {
+            parsedData[k] = v;
+          }
+        }
       } catch (err) {
         console.warn("Failed to parse form_data JSON:", err);
       }

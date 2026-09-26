@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getVendorSession } from "@/lib/auth";
+import { getVendorSession, getAdminSession } from "@/lib/auth";
 import { assertVendorOwnership, ForbiddenError, NotFoundError } from "@/lib/security";
 import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
 
@@ -8,15 +8,23 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getVendorSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const candidateId = params.id;
+    const vendorSession = await getVendorSession();
+    let candidate: any = null;
 
-    // Validate vendor ownership
-    const candidate = await assertVendorOwnership(session.vendor_id, candidateId);
+    if (vendorSession) {
+      // Validate vendor ownership
+      candidate = await assertVendorOwnership(vendorSession.vendor_id, candidateId);
+    } else {
+      const adminSession = await getAdminSession();
+      if (!adminSession) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      candidate = await sheetsRepository.getCandidateById(candidateId);
+      if (!candidate) {
+        return NextResponse.json({ error: "Candidate not found" }, { status: 404 });
+      }
+    }
 
     // Fetch checklist items and document types
     const [checklist, docTypes] = await Promise.all([

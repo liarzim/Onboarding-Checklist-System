@@ -155,7 +155,7 @@ export default function DigitalFormView({
       const maritalStatus = data.q1MaritalStatus || data.marital_status || data.maritalStatus;
       if (maritalStatus) { setQ1MaritalStatus(maritalStatus); hasAny = true; }
 
-      const otherCitizenship = data.q1OtherCitizenship || data.other_citizenship || data.otherCitizenship;
+      const otherCitizenship = data.q1OtherCitizenship || data.other_citizenship || data.otherCitizenship || data.q1OtherCitizenshipCountry || data.other_citizenship_country;
       if (otherCitizenship) { setQ1OtherCitizenship(otherCitizenship); hasAny = true; }
 
       const address = data.q1Address || data.q4Address || data.address;
@@ -336,7 +336,16 @@ export default function DigitalFormView({
         q9StartDate,
         q9PreviousGov,
         q9PreviousDates,
+        signatureDataUrl,
       };
+
+      // Filter only non-empty fields to preserve earlier answers in common storage
+      const nonEmptyAnswers: Record<string, any> = {};
+      for (const [k, v] of Object.entries(currentAnswers)) {
+        if (v !== undefined && v !== null && v !== "") {
+          nonEmptyAnswers[k] = v;
+        }
+      }
 
       // Save to localStorage for instant client persistence
       try {
@@ -344,12 +353,12 @@ export default function DigitalFormView({
           `form_data_${candidate.candidate_id}_${docTypeId}`,
           JSON.stringify(currentAnswers)
         );
-        // Also merge into common answers for this candidate
+        // Also merge only non-empty answers into common answers for this candidate
         const existingCommonStr = localStorage.getItem(`form_data_${candidate.candidate_id}_common`);
         const existingCommon = existingCommonStr ? JSON.parse(existingCommonStr) : {};
         localStorage.setItem(
           `form_data_${candidate.candidate_id}_common`,
-          JSON.stringify({ ...existingCommon, ...currentAnswers })
+          JSON.stringify({ ...existingCommon, ...nonEmptyAnswers })
         );
       } catch {
         // Ignore

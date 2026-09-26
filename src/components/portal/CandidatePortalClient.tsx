@@ -105,6 +105,43 @@ export default function CandidatePortalClient({
     return null;
   }, [selectedDocId, completedDocIds]);
 
+  // Aggregate previous form answers across all candidate checklist items for pre-filling
+  const initialFormData = useMemo(() => {
+    let mergedAnswers: any = {};
+    if (initialChecklistItems && Array.isArray(initialChecklistItems)) {
+      initialChecklistItems.forEach((it: any) => {
+        if (it.form_data) {
+          try {
+            const parsed = JSON.parse(it.form_data);
+            for (const [k, v] of Object.entries(parsed)) {
+              if (v !== undefined && v !== null && v !== "") {
+                mergedAnswers[k] = v;
+              }
+            }
+          } catch {
+            // Ignore
+          }
+        }
+      });
+
+      // Overlay specific doc answers with highest priority
+      const currentDoc = initialChecklistItems.find((i: any) => i.doc_type_id === selectedDocId);
+      if (currentDoc?.form_data) {
+        try {
+          const currentParsed = JSON.parse(currentDoc.form_data);
+          for (const [k, v] of Object.entries(currentParsed)) {
+            if (v !== undefined && v !== null && v !== "") {
+              mergedAnswers[k] = v;
+            }
+          }
+        } catch {
+          // Ignore
+        }
+      }
+    }
+    return Object.keys(mergedAnswers).length > 0 ? mergedAnswers : null;
+  }, [initialChecklistItems, selectedDocId]);
+
   // When a form is successfully signed and uploaded
   async function handleFormSubmitted(submittedDocId: string) {
     const nextSet = new Set(completedDocIds);
@@ -392,6 +429,7 @@ export default function CandidatePortalClient({
             nextDocTypeId={nextPendingDocId}
             onFormSubmitted={(submittedId) => handleFormSubmitted(submittedId)}
             onNavigateNext={handleNavigateNext}
+            initialFormData={initialFormData}
           />
         )}
       </div>
