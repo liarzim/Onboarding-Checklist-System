@@ -19,6 +19,7 @@ import {
   type FullDocumentInfo,
 } from "@/lib/forms/declarationsFullText";
 import MediaUploadCard from "./MediaUploadCard";
+import { formatIsraeliPhone } from "@/lib/validation/phoneFormat";
 
 interface CandidateData {
   candidate_id: string;
@@ -100,13 +101,32 @@ export default function DigitalFormView({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPreviousDataLoaded, setIsPreviousDataLoaded] = useState(false);
 
-  // doc_1 fields
+  // doc_1 fields matching official government form (media_1790443735357.png)
+  const candidateParts = (candidate.full_name || "").trim().split(/\s+/);
+  const defaultFirstName = candidateParts[0] || "";
+  const defaultLastName = candidateParts.slice(1).join(" ") || "";
+
+  const [q1FirstName, setQ1FirstName] = useState(defaultFirstName);
+  const [q1LastName, setQ1LastName] = useState(defaultLastName);
+  const [q1FirstNameEn, setQ1FirstNameEn] = useState("");
+  const [q1LastNameEn, setQ1LastNameEn] = useState("");
   const [q1BirthDate, setQ1BirthDate] = useState("");
   const [q1BirthCountry, setQ1BirthCountry] = useState("ישראל");
   const [q1AliyahYear, setQ1AliyahYear] = useState("");
   const [q1MaritalStatus, setQ1MaritalStatus] = useState("רווק/ה");
-  const [q1OtherCitizenship, setQ1OtherCitizenship] = useState("אין");
+  const [q1OtherCitizenship, setQ1OtherCitizenship] = useState("ללא");
+  const [q1FatherName, setQ1FatherName] = useState("");
+  const [q1PrevLastName, setQ1PrevLastName] = useState("");
+  const [q1NameEn, setQ1NameEn] = useState("");
+  const [q1Gender, setQ1Gender] = useState("זכר");
+  const [q1Religion, setQ1Religion] = useState("יהודי/ת");
   const [q1Address, setQ1Address] = useState("");
+  const [q1City, setQ1City] = useState("");
+  const [q1Street, setQ1Street] = useState("");
+  const [q1HouseNumber, setQ1HouseNumber] = useState("");
+  const [q1ZipCode, setQ1ZipCode] = useState("");
+  const [q1HomePhone, setQ1HomePhone] = useState("");
+  const [q1MobilePhone, setQ1MobilePhone] = useState(() => formatIsraeliPhone(candidate.phone));
   const [q1ArmyService, setQ1ArmyService] = useState('שירות מלא בצה"ל');
   const [q1MilitaryId, setQ1MilitaryId] = useState("");
   const [q1MilitaryRole, setQ1MilitaryRole] = useState("");
@@ -143,6 +163,11 @@ export default function DigitalFormView({
       let hasAny = false;
 
       // Personal details (doc_1)
+      if (data.q1FirstName) { setQ1FirstName(data.q1FirstName); hasAny = true; }
+      if (data.q1LastName) { setQ1LastName(data.q1LastName); hasAny = true; }
+      if (data.q1FirstNameEn) { setQ1FirstNameEn(data.q1FirstNameEn); hasAny = true; }
+      if (data.q1LastNameEn) { setQ1LastNameEn(data.q1LastNameEn); hasAny = true; }
+
       const birthDate = data.q1BirthDate || data.birth_date || data.birthDate;
       if (birthDate) { setQ1BirthDate(birthDate); hasAny = true; }
 
@@ -158,10 +183,52 @@ export default function DigitalFormView({
       const otherCitizenship = data.q1OtherCitizenship || data.other_citizenship || data.otherCitizenship || data.q1OtherCitizenshipCountry || data.other_citizenship_country;
       if (otherCitizenship) { setQ1OtherCitizenship(otherCitizenship); hasAny = true; }
 
+      const fatherName = data.q1FatherName || data.q4FatherName || data.father_name || data.fatherName;
+      if (fatherName) {
+        setQ1FatherName(fatherName);
+        setQ4FatherName(fatherName);
+        hasAny = true;
+      }
+
+      if (data.q1PrevLastName) { setQ1PrevLastName(data.q1PrevLastName); hasAny = true; }
+
+      const nameEn = data.q1NameEn || data.q9NameEn || data.name_en || data.nameEn;
+      if (nameEn) {
+        setQ1NameEn(nameEn);
+        setQ9NameEn(nameEn);
+        hasAny = true;
+      }
+
+      if (data.q1Gender || data.gender) { setQ1Gender(data.q1Gender || data.gender); hasAny = true; }
+      if (data.q1Religion || data.religion) { setQ1Religion(data.q1Religion || data.religion); hasAny = true; }
+
       const address = data.q1Address || data.q4Address || data.address;
       if (address) {
         setQ1Address(address);
         setQ4Address(address);
+        hasAny = true;
+      }
+      if (data.q1City) { setQ1City(data.q1City); hasAny = true; }
+      if (data.q1Street) { setQ1Street(data.q1Street); hasAny = true; }
+      if (data.q1HouseNumber) { setQ1HouseNumber(data.q1HouseNumber); hasAny = true; }
+      if (data.q1ZipCode) { setQ1ZipCode(data.q1ZipCode); hasAny = true; }
+
+      // Address fallback parsing if address exists but city/street are empty
+      if (address && !data.q1City && !data.q1Street) {
+        const parts = String(address).split(",").map((p: string) => p.trim());
+        if (parts.length >= 2) {
+          setQ1City(parts[0]);
+          setQ1Street(parts[1]);
+          if (parts[2]) setQ1ZipCode(parts[2].replace(/\D/g, ""));
+        } else {
+          setQ1City(address);
+        }
+      }
+
+      if (data.q1HomePhone) { setQ1HomePhone(formatIsraeliPhone(data.q1HomePhone)); hasAny = true; }
+      const mobile = data.q1MobilePhone || data.phone || data.mobilePhone;
+      if (mobile) {
+        setQ1MobilePhone(formatIsraeliPhone(mobile));
         hasAny = true;
       }
 
@@ -202,12 +269,12 @@ export default function DigitalFormView({
       if (ref2) { setQ1Ref2(ref2); hasAny = true; }
 
       // doc_4 fields
-      const fatherName = data.q4FatherName || data.father_name || data.fatherName;
-      if (fatherName) { setQ4FatherName(fatherName); hasAny = true; }
+      const doc4Father = data.q4FatherName || data.father_name || data.fatherName;
+      if (doc4Father) { setQ4FatherName(doc4Father); hasAny = true; }
 
       // doc_9 fields
-      const nameEn = data.q9NameEn || data.name_en || data.nameEn;
-      if (nameEn) { setQ9NameEn(nameEn); hasAny = true; }
+      const doc9NameEn = data.q9NameEn || data.name_en || data.nameEn;
+      if (doc9NameEn) { setQ9NameEn(doc9NameEn); hasAny = true; }
 
       const roleInProject = data.q9RoleInProject || data.role_in_project || data.roleInProject || data.job_title;
       if (roleInProject) { setQ9RoleInProject(roleInProject); hasAny = true; }
@@ -311,12 +378,27 @@ export default function DigitalFormView({
       setIsSubmitting(true);
 
       const currentAnswers = {
+        q1FirstName,
+        q1LastName,
+        q1FirstNameEn,
+        q1LastNameEn,
         q1BirthDate,
         q1BirthCountry,
         q1AliyahYear,
         q1MaritalStatus,
         q1OtherCitizenship,
-        q1Address,
+        q1FatherName,
+        q1PrevLastName,
+        q1NameEn,
+        q1Gender,
+        q1Religion,
+        q1Address: q1Address || `${q1City}, ${q1Street} ${q1HouseNumber}`.trim(),
+        q1City,
+        q1Street,
+        q1HouseNumber,
+        q1ZipCode,
+        q1HomePhone: formatIsraeliPhone(q1HomePhone),
+        q1MobilePhone: formatIsraeliPhone(q1MobilePhone || candidate.phone),
         q1ArmyService,
         q1MilitaryId,
         q1MilitaryRole,
@@ -328,9 +410,9 @@ export default function DigitalFormView({
         q1Workplace2,
         q1Ref1,
         q1Ref2,
-        q4FatherName,
-        q4Address,
-        q9NameEn,
+        q4FatherName: q4FatherName || q1FatherName,
+        q4Address: q4Address || q1Address || `${q1City}, ${q1Street} ${q1HouseNumber}`.trim(),
+        q9NameEn: q9NameEn || q1NameEn,
         q9RoleInProject,
         q9ManagerName,
         q9StartDate,
@@ -485,95 +567,124 @@ export default function DigitalFormView({
         {/* Printable Form Container - Captured by html2canvas */}
         <div
           ref={printRef}
-          className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-12 shadow-sm space-y-8 text-slate-900"
+          className={`bg-white text-slate-900 ${
+            docTypeId === "doc_1"
+              ? "p-6 sm:p-8 max-w-[850px] mx-auto border border-slate-300 shadow-sm space-y-3"
+              : "rounded-2xl border border-slate-200 p-8 sm:p-12 shadow-sm space-y-8"
+          }`}
           dir="rtl"
         >
-          {/* Formal Authentic Government Header with Official Logos */}
-          <div className="pdf-section border-b-2 border-slate-900 pb-5 space-y-4" data-pdf-section="header">
-            <div className="flex items-center justify-between">
-              {/* Right Side: gov.il Logo and Ministry Department */}
-              <div className="flex items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/logos/gov_il_logo.jpg"
-                  alt="gov.il"
-                  className="h-10 w-auto object-contain"
-                />
-                <div className="text-right leading-tight">
-                  <span className="block text-xs font-black text-slate-900">מדינת ישראל</span>
-                  <span className="block text-[11px] font-bold text-slate-700">החשב הכללי</span>
-                  <span className="block text-[10px] text-slate-500 font-medium">התקשוב הממשלתי (מרכב"ה)</span>
+          {docTypeId !== "doc_1" && (
+            <>
+              {/* Formal Authentic Government Header with Official Logos */}
+              <div className="pdf-section border-b-2 border-slate-900 pb-5 space-y-4" data-pdf-section="header">
+                <div className="flex items-center justify-between">
+                  {/* Right Side: gov.il Logo and Ministry Department */}
+                  <div className="flex items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/logos/gov_il_logo.jpg"
+                      alt="gov.il"
+                      className="h-10 w-auto object-contain"
+                    />
+                    <div className="text-right leading-tight">
+                      <span className="block text-xs font-black text-slate-900">מדינת ישראל</span>
+                      <span className="block text-[11px] font-bold text-slate-700">החשב הכללי</span>
+                      <span className="block text-[10px] text-slate-500 font-medium">התקשוב הממשלתי (מרכב"ה)</span>
+                    </div>
+                  </div>
+
+                  {/* Center: Title & Subtitle */}
+                  <div className="text-center px-2">
+                    <h1 className="text-xl sm:text-2xl font-black text-slate-900 underline decoration-slate-400 underline-offset-4">
+                      {docInfo.name}
+                    </h1>
+                    <p className="text-xs text-slate-600 font-medium mt-1">{docInfo.shortDesc}</p>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      <span>תאריך: </span>
+                      <span className="font-semibold text-slate-800">{todayStr}</span>
+                    </div>
+                  </div>
+
+                  {/* Left Side: State of Israel Emblem (Magen David) */}
+                  <div className="flex items-center justify-end">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/logos/israel_emblem.png"
+                      alt="סמל מדינת ישראל"
+                      className="h-14 sm:h-16 w-auto object-contain"
+                    />
+                  </div>
+                </div>
+
+                {docInfo.lawReference && (
+                  <div className="text-center text-[11px] text-blue-800 font-semibold bg-blue-50/70 py-1 px-3 rounded-lg border border-blue-200">
+                    בסיס חוקי ומנהלי: {docInfo.lawReference}
+                  </div>
+                )}
+              </div>
+
+              {/* Candidate Profile Details Summary Box */}
+              <div className="pdf-section bg-slate-50 rounded-xl p-5 border border-slate-200 space-y-3" data-pdf-section="candidate-details">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  פרטי המועמד/ת והשיוך
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <span className="text-xs text-slate-500 block">שם מלא:</span>
+                    <span className="font-bold text-slate-900">{candidate.full_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500 block">תעודת זהות:</span>
+                    <span className="font-mono font-bold text-slate-900">{candidate.id_number}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500 block">פרויקט יעד:</span>
+                    <span className="font-semibold text-slate-900">{candidate.project_id}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500 block">חברת ספק / מעסיק:</span>
+                    <span className="font-semibold text-slate-900">
+                      {candidate.vendor_company_name || candidate.vendor_id}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500 block">טלפון:</span>
+                    <span className="font-mono text-slate-700" dir="ltr">
+                      {formatIsraeliPhone(candidate.phone) || "לא צוין"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500 block">דואר אלקטרוני:</span>
+                    <span className="font-mono text-slate-700" dir="ltr">{candidate.email}</span>
+                  </div>
                 </div>
               </div>
-
-              {/* Center: Title & Subtitle */}
-              <div className="text-center px-2">
-                <h1 className="text-xl sm:text-2xl font-black text-slate-900 underline decoration-slate-400 underline-offset-4">
-                  {docInfo.name}
-                </h1>
-                <p className="text-xs text-slate-600 font-medium mt-1">{docInfo.shortDesc}</p>
-                <div className="text-[11px] text-slate-500 mt-0.5">
-                  <span>תאריך: </span>
-                  <span className="font-semibold text-slate-800">{todayStr}</span>
-                </div>
-              </div>
-
-              {/* Left Side: State of Israel Emblem (Magen David) */}
-              <div className="flex items-center justify-end">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/logos/israel_emblem.png"
-                  alt="סמל מדינת ישראל"
-                  className="h-14 sm:h-16 w-auto object-contain"
-                />
-              </div>
-            </div>
-
-            {docInfo.lawReference && (
-              <div className="text-center text-[11px] text-blue-800 font-semibold bg-blue-50/70 py-1 px-3 rounded-lg border border-blue-200">
-                בסיס חוקי ומנהלי: {docInfo.lawReference}
-              </div>
-            )}
-          </div>
-
-          {/* Candidate Profile Details Summary Box */}
-          <div className="pdf-section bg-slate-50 rounded-xl p-5 border border-slate-200 space-y-3" data-pdf-section="candidate-details">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              פרטי המועמד/ת והשיוך
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-              <div>
-                <span className="text-xs text-slate-500 block">שם מלא:</span>
-                <span className="font-bold text-slate-900">{candidate.full_name}</span>
-              </div>
-              <div>
-                <span className="text-xs text-slate-500 block">תעודת זהות:</span>
-                <span className="font-mono font-bold text-slate-900">{candidate.id_number}</span>
-              </div>
-              <div>
-                <span className="text-xs text-slate-500 block">פרויקט יעד:</span>
-                <span className="font-semibold text-slate-900">{candidate.project_id}</span>
-              </div>
-              <div>
-                <span className="text-xs text-slate-500 block">חברת ספק / מעסיק:</span>
-                <span className="font-semibold text-slate-900">
-                  {candidate.vendor_company_name || candidate.vendor_id}
-                </span>
-              </div>
-              <div>
-                <span className="text-xs text-slate-500 block">טלפון:</span>
-                <span className="font-mono text-slate-700">{candidate.phone || "לא צוין"}</span>
-              </div>
-              <div>
-                <span className="text-xs text-slate-500 block">דואר אלקטרוני:</span>
-                <span className="font-mono text-slate-700">{candidate.email}</span>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
 
           {/* Form Specific Inputs & Layout */}
           {docTypeId === "doc_1" && (
             <Doc1PersonalQuestionnaire
+              candidate={candidate}
+              todayStr={todayStr}
+              signatureDataUrl={signatureDataUrl}
+              firstName={q1FirstName}
+              setFirstName={setQ1FirstName}
+              lastName={q1LastName}
+              setLastName={setQ1LastName}
+              fatherName={q1FatherName}
+              setFatherName={setQ1FatherName}
+              prevLastName={q1PrevLastName}
+              setPrevLastName={setQ1PrevLastName}
+              nameEnFirst={q1FirstNameEn}
+              setNameEnFirst={setQ1FirstNameEn}
+              nameEnLast={q1LastNameEn}
+              setNameEnLast={setQ1LastNameEn}
+              gender={q1Gender}
+              setGender={setQ1Gender}
+              religion={q1Religion}
+              setReligion={setQ1Religion}
               birthDate={q1BirthDate}
               setBirthDate={setQ1BirthDate}
               birthCountry={q1BirthCountry}
@@ -584,30 +695,18 @@ export default function DigitalFormView({
               setMaritalStatus={setQ1MaritalStatus}
               otherCitizenship={q1OtherCitizenship}
               setOtherCitizenship={setQ1OtherCitizenship}
-              address={q1Address}
-              setAddress={setQ1Address}
-              armyService={q1ArmyService}
-              setArmyService={setQ1ArmyService}
-              militaryId={q1MilitaryId}
-              setMilitaryId={setQ1MilitaryId}
-              militaryRole={q1MilitaryRole}
-              setMilitaryRole={setQ1MilitaryRole}
-              militaryYears={q1MilitaryYears}
-              setMilitaryYears={setQ1MilitaryYears}
-              exemptionReason={q1ExemptionReason}
-              setExemptionReason={setQ1ExemptionReason}
-              educationHigh={q1EducationHigh}
-              setEducationHigh={setQ1EducationHigh}
-              educationAcademic={q1EducationAcademic}
-              setEducationAcademic={setQ1EducationAcademic}
-              workplace1={q1Workplace1}
-              setWorkplace1={setQ1Workplace1}
-              workplace2={q1Workplace2}
-              setWorkplace2={setQ1Workplace2}
-              ref1={q1Ref1}
-              setRef1={setQ1Ref1}
-              ref2={q1Ref2}
-              setRef2={setQ1Ref2}
+              city={q1City}
+              setCity={setQ1City}
+              street={q1Street}
+              setStreet={setQ1Street}
+              houseNumber={q1HouseNumber}
+              setHouseNumber={setQ1HouseNumber}
+              zipCode={q1ZipCode}
+              setZipCode={setQ1ZipCode}
+              homePhone={q1HomePhone}
+              setHomePhone={setQ1HomePhone}
+              mobilePhone={q1MobilePhone}
+              setMobilePhone={setQ1MobilePhone}
               docInfo={docInfo}
             />
           )}
@@ -654,24 +753,77 @@ export default function DigitalFormView({
             />
           )}
 
-          {/* Signature and Legal Declaration Section */}
-          <div className="pdf-section pt-4 border-t border-slate-200 space-y-6" data-pdf-section="signature-footer">
-            <div>
-              <label className="flex items-start gap-3 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={agreeTerms}
-                  onChange={(e) => setAgreeTerms(e.target.checked)}
-                  className="mt-1 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-xs text-slate-700 leading-relaxed font-medium">
-                  הנני מאשר/ת בחתימתי כי קראתי בעיון את כל סעיפי המסמך, הבנתי את תוכנו ומשמעותו המשפטית,
-                  והפרטים שנמסרו על ידי נכונים ומלאים.
-                </span>
-              </label>
-            </div>
+          {/* Signature and Legal Declaration Section for doc_2 through doc_9 */}
+          {docTypeId !== "doc_1" && (
+            <div className="pdf-section pt-4 border-t border-slate-200 space-y-6" data-pdf-section="signature-footer">
+              <div>
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={agreeTerms}
+                    onChange={(e) => setAgreeTerms(e.target.checked)}
+                    className="mt-1 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-xs text-slate-700 leading-relaxed font-medium">
+                    הנני מאשר/ת בחתימתי כי קראתי בעיון את כל סעיפי המסמך, הבנתי את תוכנו ומשמעותו המשפטית,
+                    והפרטים שנמסרו על ידי נכונים ומלאים.
+                  </span>
+                </label>
+              </div>
 
-            {/* Digital Signature Area */}
+              {/* Digital Signature Area */}
+              <div>
+                <SignaturePad
+                  onSignatureChange={setSignatureDataUrl}
+                  signerName={candidate.full_name}
+                  initialSignatureUrl={signatureDataUrl}
+                />
+              </div>
+
+              {/* Formal Authentic Government Footer */}
+              <div className="pt-6 border-t-2 border-slate-900 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-600 gap-3">
+                <div className="text-right">
+                  <span>אוצר ברשת: </span>
+                  <span className="font-mono text-blue-700 font-semibold">www.mof.gov.il</span>
+                  <span className="mx-1.5">|</span>
+                  <span>רח' יפו 234 ירושלים</span>
+                </div>
+                <div className="flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/logos/gov_il_logo.jpg"
+                    alt="gov.il"
+                    className="h-6 w-auto object-contain opacity-80"
+                  />
+                </div>
+                <div className="text-left font-mono">
+                  <span>טל': 02-5012401</span>
+                  <span className="mx-1.5">|</span>
+                  <span>שער הממשלה: www.gov.il</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Dedicated Web Signing Pad for doc_1 (outside printRef so PDF is pure authentic gov doc) */}
+        {docTypeId === "doc_1" && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+            <div className="font-bold text-sm text-slate-900 border-b pb-2">
+              חתימה דיגיטלית על שאלון רמה 5 (החתימה מוטמעת ישירות בחלק ב' של המסמך הממשלתי)
+            </div>
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={agreeTerms}
+                onChange={(e) => setAgreeTerms(e.target.checked)}
+                className="mt-1 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-xs text-slate-700 leading-relaxed font-medium">
+                הנני מאשר/ת בחתימתי כי כל הפרטים שנמסרו בשאלון אישי זה נכונים, מדויקים ומלאים.
+              </span>
+            </label>
+
             <div>
               <SignaturePad
                 onSignatureChange={setSignatureDataUrl}
@@ -679,31 +831,8 @@ export default function DigitalFormView({
                 initialSignatureUrl={signatureDataUrl}
               />
             </div>
-
-            {/* Formal Authentic Government Footer */}
-            <div className="pt-6 border-t-2 border-slate-900 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-600 gap-3">
-              <div className="text-right">
-                <span>אוצר ברשת: </span>
-                <span className="font-mono text-blue-700 font-semibold">www.mof.gov.il</span>
-                <span className="mx-1.5">|</span>
-                <span>רח' יפו 234 ירושלים</span>
-              </div>
-              <div className="flex items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/logos/gov_il_logo.jpg"
-                  alt="gov.il"
-                  className="h-6 w-auto object-contain opacity-80"
-                />
-              </div>
-              <div className="text-left font-mono">
-                <span>טל': 02-5012401</span>
-                <span className="mx-1.5">|</span>
-                <span>שער הממשלה: www.gov.il</span>
-              </div>
-            </div>
           </div>
-        </div>
+        )}
 
         {/* Action Button Bar */}
         <div className="space-y-3">
@@ -820,282 +949,669 @@ function DocClausesOnly({
 }
 
 // -------------------------------------------------------------
-// Form 1: Personal Questionnaire Level 5
+// Form 1: Personal Questionnaire Level 5 (Authentic Government Layout)
+// Matches media_1790443735357.png
 // -------------------------------------------------------------
 function Doc1PersonalQuestionnaire({
+  candidate,
+  todayStr,
+  signatureDataUrl,
+  firstName,
+  setFirstName,
+  lastName,
+  setLastName,
+  fatherName,
+  setFatherName,
+  prevLastName,
+  setPrevLastName,
+  nameEnFirst,
+  setNameEnFirst,
+  nameEnLast,
+  setNameEnLast,
+  gender,
+  setGender,
+  religion,
+  setReligion,
   birthDate,
   setBirthDate,
   birthCountry,
   setBirthCountry,
   aliyahYear,
   setAliyahYear,
-  maritalStatus,
-  setMaritalStatus,
   otherCitizenship,
   setOtherCitizenship,
-  address,
-  setAddress,
-  armyService,
-  setArmyService,
-  militaryId,
-  setMilitaryId,
-  militaryRole,
-  setMilitaryRole,
-  militaryYears,
-  setMilitaryYears,
-  exemptionReason,
-  setExemptionReason,
-  educationHigh,
-  setEducationHigh,
-  educationAcademic,
-  setEducationAcademic,
-  workplace1,
-  setWorkplace1,
-  workplace2,
-  setWorkplace2,
-  ref1,
-  setRef1,
-  ref2,
-  setRef2,
-  docInfo,
+  city,
+  setCity,
+  street,
+  setStreet,
+  houseNumber,
+  setHouseNumber,
+  zipCode,
+  setZipCode,
+  homePhone,
+  setHomePhone,
+  mobilePhone,
+  setMobilePhone,
 }: any) {
+  // Padded 9-digit Israeli ID
+  const rawId: string = String(candidate?.id_number || "").replace(/\D/g, "");
+  const paddedId: string = rawId.padStart(9, "0").slice(-9);
+  const idDigits: string[] = paddedId.split("");
+
   return (
-    <div className="space-y-6">
-      {/* Questionnaire Instructions & Legal Clauses */}
-      <div className="pdf-section bg-blue-50/60 border border-blue-200 rounded-xl p-4 space-y-2 text-xs text-blue-900" data-pdf-section="instructions">
-        <h4 className="font-bold text-sm text-blue-950">הוראות מילוי והצהרה:</h4>
-        {docInfo.fullContent.map((clause: string, i: number) => (
-          <p key={i} className="leading-relaxed">
-            {clause}
-          </p>
-        ))}
+    <div className="space-y-3 text-slate-900 bg-white" dir="rtl">
+      {/* 1. Top Security Warning Box */}
+      <div className="border-2 border-slate-900 py-1 px-2 text-center text-xs font-bold text-slate-900 leading-tight">
+        מסמך זה מכיל מידע לצורך הליך של הגנת סודיות. כל המוסרו שלא כדין עובר עבירה
       </div>
 
-      {/* Section 1: Personal Details */}
-      <div className="pdf-section border border-slate-200 rounded-xl p-5 space-y-4" data-pdf-section="part-a">
-        <h3 className="font-bold text-slate-900 text-base border-b pb-2">
-          חלק א': פרטים אישיים
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-          <div>
-            <label className="font-semibold block mb-1">תאריך לידה:</label>
-            <input
-              type="date"
-              value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-              required
-            />
-          </div>
-          <div>
-            <label className="font-semibold block mb-1">ארץ לידה:</label>
-            <input
-              type="text"
-              value={birthCountry}
-              onChange={(e) => setBirthCountry(e.target.value)}
-              placeholder="למשל: ישראל"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-              required
-            />
-          </div>
-          <div>
-            <label className="font-semibold block mb-1">שנת עלייה (אם רלוונטי):</label>
-            <input
-              type="text"
-              value={aliyahYear}
-              onChange={(e) => setAliyahYear(e.target.value)}
-              placeholder="שנה או ציין 'יליד הארץ'"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-            />
-          </div>
-          <div>
-            <label className="font-semibold block mb-1">מצב משפחתי:</label>
-            <select
-              value={maritalStatus}
-              onChange={(e) => setMaritalStatus(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-            >
-              <option value="רווק/ה">רווק/ה</option>
-              <option value="נשוי/ה">נשוי/ה</option>
-              <option value="גרוש/ה">גרוש/ה</option>
-              <option value="אלמן/ה">אלמן/ה</option>
-            </select>
-          </div>
-          <div>
-            <label className="font-semibold block mb-1">אזרחויות נוספות:</label>
-            <input
-              type="text"
-              value={otherCitizenship}
-              onChange={(e) => setOtherCitizenship(e.target.value)}
-              placeholder="אם אין ציין 'אין'"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-            />
-          </div>
-          <div className="sm:col-span-3">
-            <label className="font-semibold block mb-1">כתובת מגורים מלאה (עיר, רחוב, בית):</label>
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="למשל: תל אביב, רחוב ויצמן 12"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-              required
-            />
-          </div>
+      {/* 2. Emblem and Header */}
+      <div className="flex flex-col items-center justify-center text-center space-y-0.5 pt-0.5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logos/israel_emblem.png"
+          alt="סמל מדינת ישראל"
+          className="h-11 w-auto object-contain mx-auto"
+        />
+        <div className="text-[11px] font-bold text-slate-900">מדינת ישראל</div>
+        <div className="text-[10px] font-bold text-slate-900">
+          היחידה הממלכתית לקביעת התאמה ביטחונית
+        </div>
+        <h1 className="text-base sm:text-lg font-black text-slate-900 pt-0.5">
+          שאלון אישי לצרכי קביעת התאמה ביטחונית
+        </h1>
+        <h2 className="text-xs sm:text-sm font-bold text-slate-900">
+          למועמד/ת לרמה 5
+        </h2>
+      </div>
+
+      {/* 3. Routing Line (אל / מאת / גוף משלח) */}
+      <div className="flex items-center justify-between text-xs font-bold text-slate-900 pt-0.5 pb-1 border-b border-slate-400">
+        <div className="flex items-center gap-1">
+          <span>אל:</span>
+          <span className="font-normal underline decoration-dotted underline-offset-4">ממונה ביטחון</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span>מאת:</span>
+          <span className="font-bold underline decoration-dotted underline-offset-4">{candidate.full_name}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span>גוף משלח:</span>
+          <span className="font-normal underline decoration-dotted underline-offset-4">
+            {candidate.vendor_company_name || candidate.vendor_id || candidate.project_id}
+          </span>
         </div>
       </div>
 
-      {/* Section 2: Military / National Service */}
-      <div className="pdf-section border border-slate-200 rounded-xl p-5 space-y-4" data-pdf-section="part-b">
-        <h3 className="font-bold text-slate-900 text-base border-b pb-2">
-          חלק ב': שירות צבאי / לאומי / פטור
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-          <div>
-            <label className="font-semibold block mb-1">סוג שירות:</label>
-            <select
-              value={armyService}
-              onChange={(e) => setArmyService(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-            >
-              <option value={'שירות מלא בצה"ל'}>{'שירות מלא בצה"ל'}</option>
-              <option value="שירות לאומי/אזרחי">שירות לאומי / אזרחי</option>
-              <option value="פטור משירות">פטור משירות</option>
-              <option value="שירות קבע">שירות קבע</option>
-            </select>
+      {/* 4. חלק א' - פרטים אישיים */}
+      <div className="space-y-1">
+        <div className="font-bold text-xs sm:text-sm text-slate-900">
+          חלק א' - פרטים אישיים
+        </div>
+
+        {/* Table 1: Names Grid */}
+        <table className="w-full border-collapse border border-slate-900 text-xs">
+          <thead>
+            <tr className="bg-slate-100 text-slate-900">
+              <th className="border border-slate-900 p-1 w-16 text-center font-bold"> </th>
+              <th className="border border-slate-900 p-1 text-center font-bold">שם משפחה</th>
+              <th className="border border-slate-900 p-1 text-center font-bold">שם פרטי</th>
+              <th className="border border-slate-900 p-1 text-center font-bold">שם אב</th>
+              <th className="border border-slate-900 p-1 text-center font-bold">שם משפחה קודם/נוסף</th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* Current Names Row - Hebrew */}
+            <tr>
+              <td rowSpan={2} className="border border-slate-900 p-1 text-center font-bold bg-slate-50 align-middle">
+                נוכחי
+              </td>
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <span className="text-[9px] text-slate-500 block text-right">בעברית:</span>
+                <input
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="משפחה"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-0.5 text-xs sm:text-sm"
+                  dir="rtl"
+                />
+              </td>
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <span className="text-[9px] text-slate-500 block text-right">בעברית:</span>
+                <input
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="פרטי"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-0.5 text-xs sm:text-sm"
+                  dir="rtl"
+                />
+              </td>
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <span className="text-[9px] text-slate-500 block text-right">בעברית:</span>
+                <input
+                  type="text"
+                  value={fatherName}
+                  onChange={(e) => setFatherName(e.target.value)}
+                  placeholder="שם האב"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-0.5 text-xs sm:text-sm"
+                  dir="rtl"
+                />
+              </td>
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <span className="text-[9px] text-slate-500 block text-right">בעברית:</span>
+                <input
+                  type="text"
+                  value={prevLastName}
+                  onChange={(e) => setPrevLastName(e.target.value)}
+                  placeholder="קודם/נוסף"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-0.5 text-xs sm:text-sm"
+                  dir="rtl"
+                />
+              </td>
+            </tr>
+            {/* Current Names Row - English */}
+            <tr>
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <span className="text-[9px] text-slate-500 block text-right">בלועזית:</span>
+                <input
+                  type="text"
+                  value={nameEnLast}
+                  onChange={(e) => setNameEnLast(e.target.value)}
+                  placeholder="Last Name"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-0.5 text-xs sm:text-sm"
+                  dir="ltr"
+                />
+              </td>
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <span className="text-[9px] text-slate-500 block text-right">בלועזית:</span>
+                <input
+                  type="text"
+                  value={nameEnFirst}
+                  onChange={(e) => setNameEnFirst(e.target.value)}
+                  placeholder="First Name"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-0.5 text-xs sm:text-sm"
+                  dir="ltr"
+                />
+              </td>
+              <td className="border border-slate-900 p-1 text-center align-middle bg-slate-50/40">
+                <span className="text-[9px] text-slate-400 block text-right">בלועזית:</span>
+                <span className="text-slate-300">-</span>
+              </td>
+              <td className="border border-slate-900 p-1 text-center align-middle bg-slate-50/40">
+                <span className="text-[9px] text-slate-400 block text-right">בלועזית:</span>
+                <span className="text-slate-300">-</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Table 2: ID Digits, Previous ID & Gender */}
+        <table className="w-full border-collapse border border-slate-900 text-xs">
+          <thead>
+            <tr className="bg-slate-100 text-slate-900">
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "45%" }}>
+                מס' זהות
+              </th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "35%" }}>
+                מס' זיהוי קודם/נוסף
+              </th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "20%" }}>
+                מין
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {/* 9 Centered Square Boxes for ID Digits */}
+              <td className="border border-slate-900 p-1.5 text-center align-middle">
+                <div className="flex items-center justify-center gap-1" dir="ltr">
+                  {idDigits.map((digit: string, i: number) => (
+                    <div
+                      key={i}
+                      className="w-6 h-6 sm:w-7 sm:h-7 border border-slate-900 flex items-center justify-center font-mono font-bold text-xs sm:text-sm text-slate-900 bg-white shadow-2xs"
+                    >
+                      {digit}
+                    </div>
+                  ))}
+                </div>
+              </td>
+              {/* 9 Empty/Placeholder Boxes for Previous ID */}
+              <td className="border border-slate-900 p-1.5 text-center align-middle">
+                <div className="flex items-center justify-center gap-1" dir="ltr">
+                  {Array.from({ length: 9 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="w-6 h-6 sm:w-7 sm:h-7 border border-slate-400 flex items-center justify-center font-mono text-xs text-slate-300 bg-slate-50/50"
+                    >
+                      {" "}
+                    </div>
+                  ))}
+                </div>
+              </td>
+              {/* Gender Radio Choices */}
+              <td className="border border-slate-900 p-1.5 text-center align-middle">
+                <div className="flex items-center justify-center gap-3 text-xs font-bold">
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="q1Gender"
+                      value="זכר"
+                      checked={gender === "זכר"}
+                      onChange={() => setGender("זכר")}
+                      className="w-3.5 h-3.5 text-slate-900"
+                    />
+                    <span>זכר</span>
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="q1Gender"
+                      value="נקבה"
+                      checked={gender === "נקבה"}
+                      onChange={() => setGender("נקבה")}
+                      className="w-3.5 h-3.5 text-slate-900"
+                    />
+                    <span>נקבה</span>
+                  </label>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Table 3: Religion, Birth Date, Birth Country, Aliyah, Additional Citizenship */}
+        <table className="w-full border-collapse border border-slate-900 text-xs">
+          <thead>
+            <tr className="bg-slate-100 text-slate-900">
+              <th className="border border-slate-900 p-1 text-center font-bold">דת</th>
+              <th className="border border-slate-900 p-1 text-center font-bold">תאריך לידה</th>
+              <th className="border border-slate-900 p-1 text-center font-bold">ארץ לידה</th>
+              <th className="border border-slate-900 p-1 text-center font-bold">תאריך עליה</th>
+              <th className="border border-slate-900 p-1 text-center font-bold">
+                אזרחות נוספת או מעמד של תושב קבע (אם יש ציין)
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {/* Religion */}
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <input
+                  type="text"
+                  value={religion}
+                  onChange={(e) => setReligion(e.target.value)}
+                  placeholder="למשל: יהודי/ת"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  dir="rtl"
+                />
+              </td>
+              {/* Birth Date */}
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <input
+                  type="text"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  placeholder="DD/MM/YYYY"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  dir="ltr"
+                />
+              </td>
+              {/* Birth Country */}
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <div className="flex flex-col gap-1 text-[11px] text-right">
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="q1BirthCountryChoice"
+                      checked={birthCountry === "ישראל"}
+                      onChange={() => setBirthCountry("ישראל")}
+                      className="w-3.5 h-3.5 text-slate-900"
+                    />
+                    <span>ישראל</span>
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="q1BirthCountryChoice"
+                      checked={birthCountry !== "ישראל"}
+                      onChange={() => {
+                        if (birthCountry === "ישראל") setBirthCountry("");
+                      }}
+                      className="w-3.5 h-3.5 text-slate-900"
+                    />
+                    <span>אחר:</span>
+                    {birthCountry !== "ישראל" && (
+                      <input
+                        type="text"
+                        value={birthCountry}
+                        onChange={(e) => setBirthCountry(e.target.value)}
+                        className="border-b border-slate-900 text-center font-bold text-xs bg-transparent w-16 focus:outline-none"
+                        placeholder="ארץ"
+                      />
+                    )}
+                  </label>
+                </div>
+              </td>
+              {/* Aliyah Date */}
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <input
+                  type="text"
+                  value={aliyahYear}
+                  onChange={(e) => setAliyahYear(e.target.value)}
+                  placeholder="יליד הארץ"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                />
+              </td>
+              {/* Additional Citizenship */}
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <div className="flex items-center justify-center gap-2 text-[11px]">
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="q1CitizenshipChoice"
+                      checked={otherCitizenship === "ישראלית"}
+                      onChange={() => setOtherCitizenship("ישראלית")}
+                      className="w-3 h-3 text-slate-900"
+                    />
+                    <span>ישראלית</span>
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="q1CitizenshipChoice"
+                      checked={otherCitizenship === "ללא" || !otherCitizenship}
+                      onChange={() => setOtherCitizenship("ללא")}
+                      className="w-3 h-3 text-slate-900"
+                    />
+                    <span>ללא</span>
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="q1CitizenshipChoice"
+                      checked={otherCitizenship !== "ישראלית" && otherCitizenship !== "ללא" && otherCitizenship !== ""}
+                      onChange={() => {
+                        if (otherCitizenship === "ישראלית" || otherCitizenship === "ללא") setOtherCitizenship("אחרת");
+                      }}
+                      className="w-3 h-3 text-slate-900"
+                    />
+                    <span>אחרת:</span>
+                    {otherCitizenship !== "ישראלית" && otherCitizenship !== "ללא" && (
+                      <input
+                        type="text"
+                        value={otherCitizenship === "אחרת" ? "" : otherCitizenship}
+                        onChange={(e) => setOtherCitizenship(e.target.value)}
+                        className="border-b border-slate-900 text-center font-bold text-xs bg-transparent w-16 focus:outline-none"
+                        placeholder="ציין"
+                      />
+                    )}
+                  </label>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* 5. חלק ב' - שירותי תקשורת */}
+      <div className="space-y-1">
+        <div className="font-bold text-xs sm:text-sm text-slate-900">
+          חלק ב' - שירותי תקשורת
+        </div>
+        <div className="text-[11px] font-bold text-slate-800">
+          כתובת נוכחית
+        </div>
+
+        {/* Address & Phones Table */}
+        <table className="w-full border-collapse border border-slate-900 text-xs">
+          <thead>
+            <tr className="bg-slate-100 text-slate-900">
+              <th className="border border-slate-900 p-1 text-center font-bold">ישוב</th>
+              <th className="border border-slate-900 p-1 text-center font-bold">רחוב</th>
+              <th className="border border-slate-900 p-1 text-center font-bold">מס' בית/דירה</th>
+              <th className="border border-slate-900 p-1 text-center font-bold">מיקוד</th>
+              <th className="border border-slate-900 p-1 text-center font-bold">טלפון בבית</th>
+              <th className="border border-slate-900 p-1 text-center font-bold">נייד</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {/* City */}
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <input
+                  type="text"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="עיר / ישוב"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  dir="rtl"
+                />
+              </td>
+              {/* Street */}
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <input
+                  type="text"
+                  value={street}
+                  onChange={(e) => setStreet(e.target.value)}
+                  placeholder="שם רחוב"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  dir="rtl"
+                />
+              </td>
+              {/* House Number */}
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <input
+                  type="text"
+                  value={houseNumber}
+                  onChange={(e) => setHouseNumber(e.target.value)}
+                  placeholder="מספר"
+                  className="w-full text-center font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                />
+              </td>
+              {/* Zip Code */}
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <input
+                  type="text"
+                  value={zipCode}
+                  onChange={(e) => setZipCode(e.target.value)}
+                  placeholder="מיקוד"
+                  className="w-full text-center font-mono font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  dir="ltr"
+                />
+              </td>
+              {/* Home Phone */}
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <input
+                  type="text"
+                  value={homePhone}
+                  onChange={(e) => setHomePhone(e.target.value)}
+                  onBlur={() => setHomePhone(formatIsraeliPhone(homePhone))}
+                  placeholder="0X-XXXXXXX"
+                  className="w-full text-center font-mono font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  dir="ltr"
+                />
+              </td>
+              {/* Mobile Phone */}
+              <td className="border border-slate-900 p-1 text-center align-middle">
+                <input
+                  type="text"
+                  value={mobilePhone}
+                  onChange={(e) => setMobilePhone(e.target.value)}
+                  onBlur={() => setMobilePhone(formatIsraeliPhone(mobilePhone))}
+                  placeholder="05X-XXXXXXX"
+                  className="w-full text-center font-mono font-bold text-slate-900 bg-transparent focus:outline-none p-1 text-xs"
+                  dir="ltr"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Email Full-Width Row */}
+        <div className="border border-slate-900 p-1 flex items-center justify-between text-xs">
+          <span className="font-bold text-slate-800 pr-2">כתובת דואר אלקטרוני:</span>
+          <span className="font-mono font-bold text-slate-900 text-xs sm:text-sm pl-2" dir="ltr">
+            {candidate.email}
+          </span>
+        </div>
+
+        {/* Candidate Signature & Date Row */}
+        <div className="flex items-center justify-between text-xs font-bold text-slate-900 pt-1 pb-1">
+          <div className="flex items-center gap-1.5">
+            <span>תאריך:</span>
+            <span className="font-mono font-bold underline decoration-dotted underline-offset-4">{todayStr}</span>
           </div>
-          <div>
-            <label className="font-semibold block mb-1">מספר אישי / תעודת פטור:</label>
-            <input
-              type="text"
-              value={militaryId}
-              onChange={(e) => setMilitaryId(e.target.value)}
-              placeholder="מספר אישי או מספר תעודה"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-            />
-          </div>
-          <div>
-            <label className="font-semibold block mb-1">תפקיד / מקצוע צבאי:</label>
-            <input
-              type="text"
-              value={militaryRole}
-              onChange={(e) => setMilitaryRole(e.target.value)}
-              placeholder="תפקיד עיקרי"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-            />
-          </div>
-          <div>
-            <label className="font-semibold block mb-1">שנות שירות (מ- עד):</label>
-            <input
-              type="text"
-              value={militaryYears}
-              onChange={(e) => setMilitaryYears(e.target.value)}
-              placeholder="למשל: 2018 - 2021"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-            />
-          </div>
-          {armyService === "פטור משירות" && (
-            <div className="sm:col-span-2">
-              <label className="font-semibold block mb-1">פירוט סיבת הפטור:</label>
-              <input
-                type="text"
-                value={exemptionReason}
-                onChange={(e) => setExemptionReason(e.target.value)}
-                placeholder="סיבת פטור (רפואי / גיל / אחר)"
-                className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-              />
+          <div className="flex items-center gap-2">
+            <span>חתימת המועמד/ת:</span>
+            <div className="h-9 sm:h-10 w-40 border-b border-slate-900 flex items-center justify-center">
+              {signatureDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={signatureDataUrl}
+                  alt="חתימת המועמד/ת"
+                  className="h-8 sm:h-9 w-auto max-w-[130px] object-contain"
+                />
+              ) : (
+                <span className="text-[10px] text-slate-400 italic">
+                  [חתימה תוצג כאן לאחר החתימה]
+                </span>
+              )}
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Section 3: Education */}
-      <div className="pdf-section border border-slate-200 rounded-xl p-5 space-y-4" data-pdf-section="part-c">
-        <h3 className="font-bold text-slate-900 text-base border-b pb-2">
-          חלק ג': השכלה והכשרה מקצועית
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-          <div>
-            <label className="font-semibold block mb-1">השכלה תיכונית (שם בית ספר, עיר, שנת סיום):</label>
-            <input
-              type="text"
-              value={educationHigh}
-              onChange={(e) => setEducationHigh(e.target.value)}
-              placeholder="שם בית ספר ושנת סיום"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-            />
-          </div>
-          <div>
-            <label className="font-semibold block mb-1">השכלה אקדמית / תעודה / קורסים:</label>
-            <input
-              type="text"
-              value={educationAcademic}
-              onChange={(e) => setEducationAcademic(e.target.value)}
-              placeholder="מוסד, תחום לימודים, תואר"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-            />
           </div>
         </div>
       </div>
 
-      {/* Section 4: Employment History */}
-      <div className="pdf-section border border-slate-200 rounded-xl p-5 space-y-4" data-pdf-section="part-d">
-        <h3 className="font-bold text-slate-900 text-base border-b pb-2">
-          חלק ד': תעסוקה ב-5 השנים האחרונות
-        </h3>
-        <div className="space-y-3 text-xs">
-          <div>
-            <label className="font-semibold block mb-1">מקום עבודה אחרון (מעסיק, תפקיד, תקופה):</label>
-            <input
-              type="text"
-              value={workplace1}
-              onChange={(e) => setWorkplace1(e.target.value)}
-              placeholder="שם מעסיק, תפקיד, שנות העסקה"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-            />
+      {/* 6. חלק ג' - מילוי המשרד המקצועי (ימולא ע"י הביטחון) */}
+      <div className="space-y-1">
+        <div className="font-bold text-xs sm:text-sm text-slate-900">
+          חלק ג' - מילוי המשרד המקצועי (ימולא ע"י הביטחון)
+        </div>
+
+        <table className="w-full border-collapse border border-slate-900 text-xs">
+          <thead>
+            <tr className="bg-slate-100 text-slate-900">
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "30%" }}>
+                הגוף המשלח
+              </th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "25%" }}>
+                תפקיד
+              </th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "22%" }}>
+                מעמד
+              </th>
+              <th className="border border-slate-900 p-1 text-center font-bold" style={{ width: "23%" }}>
+                היבטי אבטחה
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {/* Sending Entity */}
+              <td className="border border-slate-900 p-1.5 text-center align-middle font-bold text-slate-900 text-xs">
+                {candidate.vendor_company_name || candidate.vendor_id || candidate.project_id}
+              </td>
+              {/* Role */}
+              <td className="border border-slate-900 p-1.5 text-center align-middle font-bold text-slate-900 text-xs">
+                יועץ / מומחה ({candidate.project_id})
+              </td>
+              {/* Employment Status Checkboxes */}
+              <td className="border border-slate-900 p-1.5 align-middle">
+                <div className="grid grid-cols-2 gap-0.5 text-[10px] text-right font-medium">
+                  <div className="flex items-center gap-1"><span className="font-bold">☒</span> קבוע</div>
+                  <div className="flex items-center gap-1"><span className="font-bold">☐</span> זמני</div>
+                  <div className="flex items-center gap-1"><span className="font-bold">☐</span> עובד</div>
+                  <div className="flex items-center gap-1"><span className="font-bold">☒</span> קבלן</div>
+                  <div className="flex items-center gap-1 col-span-2"><span className="font-bold">☐</span> אחר: _____</div>
+                </div>
+              </td>
+              {/* Security Aspects Checkboxes */}
+              <td className="border border-slate-900 p-1.5 align-middle">
+                <div className="space-y-0.5 text-[10px] text-right font-medium">
+                  <div className="flex items-center gap-1"><span className="font-bold">☒</span> מידע</div>
+                  <div className="flex items-center gap-1"><span className="font-bold">☐</span> אבטחת אישים</div>
+                  <div className="flex items-center gap-1"><span className="font-bold">☒</span> אבטחת מתקנים</div>
+                  <div className="flex items-center gap-1"><span className="font-bold">☐</span> אבטחה פיזית</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Notes Line */}
+        <div className="text-[11px] font-bold text-slate-900 pt-0.5">
+          <span>הערות: </span>
+          <span className="font-normal underline decoration-dotted underline-offset-4">
+            שאלון רמה 5 הוגש ונבדק דיגיטלית במערכת Onboarding Checklist
+          </span>
+        </div>
+      </div>
+
+      {/* 7. חלק ד' - אימות פרטים (ימולא ע"י קצין ביטחון) */}
+      <div className="space-y-1">
+        <div className="font-bold text-xs sm:text-sm text-slate-900">
+          חלק ד' - אימות פרטים (ימולא ע"י קצין ביטחון)
+        </div>
+
+        <div className="border border-slate-900 p-2 space-y-1.5 text-xs">
+          <p className="font-medium text-slate-900 leading-tight">
+            אני מצהיר/ה בזאת כי בדקתי את זהות המועמד/ת לשאלון והפרטים שמולאו ולם נמצאו נכונים לפי המסמכים המוצגים הבאים:
+          </p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-[11px] font-semibold text-slate-900">
+            <div className="flex items-center gap-1">
+              <span className="font-bold">☒</span>
+              <span>תעודת זהות - מס' {candidate.id_number}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="font-bold">☐</span>
+              <span>דרכון - מס' _______</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="font-bold">☒</span>
+              <span>רישיון נהיגה - מס' _______</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="font-bold">☐</span>
+              <span>תעודת תושב קבע</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="font-bold">☒</span>
+              <span>כתב ויתור סודיות רפואית ופלילית</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="font-bold">☒</span>
+              <span>עלון לנבדק</span>
+            </div>
           </div>
-          <div>
-            <label className="font-semibold block mb-1">מקום עבודה קודם (מעסיק, תפקיד, תקופה):</label>
-            <input
-              type="text"
-              value={workplace2}
-              onChange={(e) => setWorkplace2(e.target.value)}
-              placeholder="שם מעסיק, תפקיד, שנות העסקה"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-            />
+
+          <div className="pt-1.5 border-t border-slate-400 grid grid-cols-4 gap-2 text-center text-[10px] font-bold text-slate-900">
+            <div>
+              <span className="text-slate-500 block text-[9px]">תאריך</span>
+              <span>{todayStr}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[9px]">תואר ודרגת הבודק/ת</span>
+              <span>ממונה ביטחון</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[9px]">שם מלא של הבודק/ת</span>
+              <span>מטה אבטחה וסייבר</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[9px]">חתימת הבודק/ת</span>
+              <span className="font-mono text-slate-400 font-normal">מאומת דיגיטלית</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Section 5: References */}
-      <div className="pdf-section border border-slate-200 rounded-xl p-5 space-y-4" data-pdf-section="part-e">
-        <h3 className="font-bold text-slate-900 text-base border-b pb-2">
-          חלק ה': ממליצים (מכירים לפחות 3 שנים, לא בני משפחה)
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-          <div>
-            <label className="font-semibold block mb-1">ממליץ 1 (שם מלא, טלפון, מהות היכרות):</label>
-            <input
-              type="text"
-              value={ref1}
-              onChange={(e) => setRef1(e.target.value)}
-              placeholder="שם, טלפון, מקום עבודה"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-              required
-            />
-          </div>
-          <div>
-            <label className="font-semibold block mb-1">ממליץ 2 (שם מלא, טלפון, מהות היכרות):</label>
-            <input
-              type="text"
-              value={ref2}
-              onChange={(e) => setRef2(e.target.value)}
-              placeholder="שם, טלפון, מקום עבודה"
-              className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
-              required
-            />
-          </div>
-        </div>
+      {/* 8. Bottom Footer */}
+      <div className="flex items-center justify-between text-[10px] text-slate-600 pt-0.5 font-mono">
+        <div>טופס 138/01</div>
+        <div className="text-center font-bold text-slate-900">- 1 -</div>
+        <div className="opacity-0">טופס 138/01</div>
       </div>
     </div>
   );
@@ -1125,7 +1641,8 @@ function Doc4CriminalRecordConsent({
             value={fatherName}
             onChange={(e) => setFatherName(e.target.value)}
             placeholder="שם פרטי של האב"
-            className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
+            className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white text-center font-bold text-slate-900"
+            dir="rtl"
             required
           />
         </div>
@@ -1136,7 +1653,8 @@ function Doc4CriminalRecordConsent({
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             placeholder="עיר, רחוב ומספר בית"
-            className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
+            className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white text-center font-bold text-slate-900"
+            dir="rtl"
             required
           />
         </div>
@@ -1183,7 +1701,7 @@ function Doc9SmartCardRequest({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
           <div>
             <label className="font-bold text-slate-700 block mb-1">שם פרטי ומשפחה:</label>
-            <div className="p-2.5 bg-white border-b-2 border-slate-400 font-bold text-slate-900 rounded-t">
+            <div className="p-2.5 bg-white border-b-2 border-slate-400 font-bold text-slate-900 rounded-t text-center">
               {candidate.full_name}
             </div>
           </div>
@@ -1195,13 +1713,13 @@ function Doc9SmartCardRequest({
               onChange={(e) => setNameEn(e.target.value)}
               placeholder="Full Name in English"
               dir="ltr"
-              className="w-full border-b-2 border-slate-400 p-2.5 text-xs bg-white focus:outline-hidden font-medium rounded-t"
+              className="w-full border-b-2 border-slate-400 p-2.5 text-xs bg-white focus:outline-hidden font-bold text-center rounded-t"
             />
           </div>
 
           <div>
             <label className="font-bold text-slate-700 block mb-1">מספר תעודת זהות:</label>
-            <div className="p-2.5 bg-white border-b-2 border-slate-400 font-mono font-bold text-slate-900 rounded-t">
+            <div className="p-2.5 bg-white border-b-2 border-slate-400 font-mono font-bold text-slate-900 rounded-t text-center">
               {candidate.id_number}
             </div>
           </div>
@@ -1212,20 +1730,20 @@ function Doc9SmartCardRequest({
               value={roleInProject}
               onChange={(e) => setRoleInProject(e.target.value)}
               placeholder="למשל: מהנדס מערכות / מפתח תוכנה"
-              className="w-full border-b-2 border-slate-400 p-2.5 text-xs bg-white focus:outline-hidden font-medium rounded-t"
+              className="w-full border-b-2 border-slate-400 p-2.5 text-xs bg-white focus:outline-hidden font-bold text-center rounded-t"
               required
             />
           </div>
 
           <div>
             <label className="font-bold text-slate-700 block mb-1">דואר אלקטרוני:</label>
-            <div className="p-2.5 bg-white border-b-2 border-slate-400 font-mono text-slate-900 rounded-t">
+            <div className="p-2.5 bg-white border-b-2 border-slate-400 font-mono font-bold text-slate-900 rounded-t text-center" dir="ltr">
               {candidate.email}
             </div>
           </div>
           <div>
             <label className="font-bold text-slate-700 block mb-1">סוג העסקה:</label>
-            <div className="p-2.5 bg-white border-b-2 border-slate-400 font-semibold text-slate-800 rounded-t">
+            <div className="p-2.5 bg-white border-b-2 border-slate-400 font-semibold text-slate-800 rounded-t text-center">
               עובד קבלן / מיקור חוץ ({candidate.vendor_company_name || candidate.vendor_id})
             </div>
           </div>
@@ -1236,7 +1754,8 @@ function Doc9SmartCardRequest({
               type="text"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full border-b-2 border-slate-400 p-2.5 text-xs bg-white focus:outline-hidden font-medium rounded-t"
+              dir="ltr"
+              className="w-full border-b-2 border-slate-400 p-2.5 text-xs bg-white focus:outline-hidden font-bold text-center rounded-t"
             />
           </div>
           <div>
@@ -1245,7 +1764,7 @@ function Doc9SmartCardRequest({
               <select
                 value={previousGov}
                 onChange={(e) => setPreviousGov(e.target.value)}
-                className="border-b-2 border-slate-400 p-2 text-xs bg-white focus:outline-hidden font-semibold rounded-t"
+                className="border-b-2 border-slate-400 p-2 text-xs bg-white focus:outline-hidden font-bold rounded-t text-center"
               >
                 <option value="לא">לא</option>
                 <option value="כן">כן</option>
@@ -1256,7 +1775,7 @@ function Doc9SmartCardRequest({
                   value={previousDates}
                   onChange={(e) => setPreviousDates(e.target.value)}
                   placeholder="ציין משרד ושנים"
-                  className="flex-1 border-b-2 border-slate-400 p-2 text-xs bg-white focus:outline-hidden rounded-t"
+                  className="flex-1 border-b-2 border-slate-400 p-2 text-xs bg-white focus:outline-hidden font-bold rounded-t text-center"
                 />
               )}
             </div>
