@@ -245,6 +245,11 @@ export async function uploadFileToCandidateFolder(
 
     // If Google Drive API is configured, DO NOT silently swallow!
     if (isDriveConfigured) {
+      if (errorMsg.includes("Service Accounts do not have storage quota")) {
+        throw new Error(
+          `שגיאת מכסת אחסון ב-Google Drive: חשבון שירות (Service Account) אינו מורשה להחזיק קבצים בנפח ב-'כונן שלי' (My Drive) רגיל. פתרון: יש להעביר את תיקיית השורש ל-'כונן משותף' (Google Shared Drive) ולהוסיף את ה-Service Account כחבר בו, או לחבר חשבון Google ישירות דרך הגדרות המערכת (OAuth).`
+        );
+      }
       throw new Error(`שגיאה בשמירת המסמך "${fileName}" ב-Google Drive: ${errorMsg}`);
     }
 
