@@ -2092,9 +2092,20 @@ export default function AdminSettingsPage() {
                             </div>
                           </div>
                         ) : (
-                          <p className="text-xs text-slate-600 leading-relaxed">
-                            התחבר עם חשבון Google האישי או הארגוני שלך בלחיצת כפתור אחת. הגיליונות והקבצים ייווצרו ישירות בתוך ה-Drive שלך.
-                          </p>
+                          <div className="space-y-3">
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              התחבר עם חשבון Google האישי או הארגוני שלך בלחיצת כפתור אחת. הגיליונות והקבצים ייווצרו ישירות בתוך ה-Drive שלך ללא מגבלות נפח של חשבונות שירות.
+                            </p>
+                            <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-amber-900 text-xs space-y-1">
+                              <div className="font-bold flex items-center gap-1.5">
+                                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                                <span>חשבון Google עדיין אינו מחובר</span>
+                              </div>
+                              <p className="text-[11px] text-amber-800 leading-relaxed">
+                                כדי למנוע שגיאות מכסת אחסון בעת חתימת מועמדים על מסמכים, יש ללחוץ על הכפתור הכחול למטה ולאשר את החיבור. לאחר האישור, מפתח הרענון הקבוע (Token) יופיע כאן אוטומטית.
+                              </p>
+                            </div>
+                          </div>
                         )}
                       </div>
 
@@ -2111,10 +2122,10 @@ export default function AdminSettingsPage() {
                         ) : (
                           <a
                             href="/api/auth/google/connect-drive"
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-sm"
+                            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition shadow-md w-full"
                           >
-                            <Cloud className="w-3.5 h-3.5" />
-                            <span>חבר חשבון Google של האדמין (Drive + Sheets)</span>
+                            <Cloud className="w-4 h-4" />
+                            <span>חבר חשבון Google של האדמין עכשיו (Drive + Sheets)</span>
                           </a>
                         )}
                       </div>
