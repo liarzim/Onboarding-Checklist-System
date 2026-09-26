@@ -28,6 +28,7 @@ interface CandidateData {
   phone: string;
   vendor_id: string;
   project_id: string;
+  drive_folder_id?: string;
   vendor_company_name?: string;
 }
 
@@ -176,14 +177,18 @@ export default function DigitalFormView({
         throw new Error(data.message || "שגיאה בשמירת המסמך והעלאתו ל-Drive");
       }
 
-      setSuccessMessage("הטופס נחתם, הופק ל-PDF ונשמר בהצלחה ב-Google Drive!");
+      setSuccessMessage("הטופס נחתם, הופק ל-PDF כהלכה ונשמר בתיקיית Google Drive!");
 
       if (onFormSubmitted) {
         onFormSubmitted(docTypeId);
       }
 
-      // If embedded in candidate portal and there is a next document, allow next
-      if (!isEmbeddedInPortal) {
+      // If embedded in candidate portal and there is a next document, smoothly advance
+      if (isEmbeddedInPortal && onNavigateNext && nextDocTypeId) {
+        setTimeout(() => {
+          onNavigateNext();
+        }, 1200);
+      } else if (!isEmbeddedInPortal) {
         setTimeout(() => {
           router.push(`/vendor/candidate/${candidate.candidate_id}`);
         }, 1500);
@@ -466,37 +471,87 @@ export default function DigitalFormView({
         </div>
 
         {/* Action Button Bar */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-          {!isEmbeddedInPortal ? (
-            <Link
-              href={`/vendor/candidate/${candidate.candidate_id}`}
-              className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition text-center"
-            >
-              ביטול וחזרה
-            </Link>
-          ) : (
-            <div className="text-xs text-slate-500">
-              לאחר החתימה יופק קובץ PDF חתום ויישמר בתיקיית ה-Drive
+        <div className="space-y-3">
+          {errorMessage && (
+            <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 flex-shrink-0 text-rose-600" />
+              <span>{errorMessage}</span>
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={isSubmitting || !signatureDataUrl}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>מפיק קובץ PDF ושומר ב-Drive...</span>
-              </>
+          {successMessage && (
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600" />
+                <span className="font-semibold">{successMessage}</span>
+              </div>
+              {isEmbeddedInPortal && onNavigateNext && nextDocTypeId && (
+                <button
+                  type="button"
+                  onClick={onNavigateNext}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs"
+                >
+                  <span>המשך לטופס הבא</span>
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+            {!isEmbeddedInPortal ? (
+              <Link
+                href={`/vendor/candidate/${candidate.candidate_id}`}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition text-center"
+              >
+                ביטול וחזרה
+              </Link>
             ) : (
-              <>
-                <Send className="w-4 h-4" />
-                <span>שמור וחתום על {docInfo.name}</span>
-              </>
+              <div className="text-xs text-slate-500">
+                לאחר החתימה יופק קובץ PDF חתום ויישמר בתיקיית ה-Google Drive
+              </div>
             )}
-          </button>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+              {successMessage && isEmbeddedInPortal && onNavigateNext && nextDocTypeId && (
+                <button
+                  type="button"
+                  onClick={onNavigateNext}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md transition"
+                >
+                  <span>המשך לטופס הבא</span>
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+              )}
+
+              <button
+                type="submit"
+                disabled={isSubmitting || !signatureDataUrl}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>מפיק קובץ PDF ושומר ב-Google Drive...</span>
+                  </>
+                ) : successMessage ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                    <span>נשמר בהצלחה ב-Drive!</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    <span>
+                      {isEmbeddedInPortal && nextDocTypeId
+                        ? "שמור, חתום והמשך לטופס הבא"
+                        : `שמור וחתום על ${docInfo.name}`}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       </form>
     </div>

@@ -34,6 +34,7 @@ interface CandidatePortalClientProps {
     phone: string;
     vendor_id: string;
     project_id: string;
+    drive_folder_id?: string;
     vendor_company_name?: string;
   };
   token: string;

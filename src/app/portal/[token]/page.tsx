@@ -135,6 +135,7 @@ export default async function CandidatePortalPage({ params }: PortalPageProps) {
     phone: candidate.phone,
     vendor_id: candidate.vendor_id,
     project_id: candidate.project_id,
+    drive_folder_id: candidate.drive_folder_id,
     vendor_company_name: vendorCompanyName,
   };
 

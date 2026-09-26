@@ -70,6 +70,70 @@ export async function createCandidateFolder(
 }
 
 /**
+ * Ensures a candidate has a valid, existing Google Drive folder.
+ * If folderId is missing, test, or invalid, searches or creates a new folder.
+ */
+export async function ensureCandidateFolder(
+  candidateName: string,
+  candidateId: string,
+  existingFolderId?: string | null
+): Promise<string> {
+  const env = getEnv();
+  const isDriveConfigured = Boolean(
+    (env.GOOGLE_PRIVATE_KEY && env.GOOGLE_PRIVATE_KEY.length > 50) ||
+    (env.GOOGLE_DRIVE_ROOT_FOLDER_ID && env.GOOGLE_DRIVE_ROOT_FOLDER_ID !== "your_google_drive_folder_id_here")
+  );
+
+  if (!isDriveConfigured) {
+    const safeId = candidateId.replace(/[/\\:*?"<>|]/g, "").trim();
+    return existingFolderId || `test_drive_folder_${safeId}`;
+  }
+
+  const drive = getDriveClient();
+  const rootFolderId = extractDriveFolderId((env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "").trim());
+  const sanitizedFolderId = extractDriveFolderId(existingFolderId || "").replace(/['\\]/g, "").trim();
+
+  // 1. Check if existingFolderId is valid and exists on Drive
+  if (sanitizedFolderId && !sanitizedFolderId.startsWith("test_")) {
+    try {
+      const getRes = await drive.files.get({
+        fileId: sanitizedFolderId,
+        fields: "id, name, trashed",
+        supportsAllDrives: true,
+      });
+      if (getRes.data.id && !getRes.data.trashed) {
+        return getRes.data.id;
+      }
+    } catch (checkErr: any) {
+      console.warn(`Candidate folder ${sanitizedFolderId} check failed, will find or recreate:`, checkErr?.message);
+    }
+  }
+
+  // 2. Search for existing candidate folder under root folder
+  if (rootFolderId && rootFolderId !== "your_google_drive_folder_id_here" && rootFolderId.length > 5) {
+    try {
+      const safeId = candidateId.replace(/[/\\:*?"<>|']/g, "").trim();
+      const searchRes = await drive.files.list({
+        q: `'${rootFolderId}' in parents and name contains '${safeId}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: "files(id, name)",
+        spaces: "drive",
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+      const found = searchRes.data.files?.[0];
+      if (found?.id) {
+        return found.id;
+      }
+    } catch (searchErr) {
+      console.warn("Search for existing candidate folder failed:", searchErr);
+    }
+  }
+
+  // 3. Create fresh candidate folder
+  return createCandidateFolder(candidateName, candidateId);
+}
+
+/**
  * Uploads a document directly to the candidate's Drive folder.
  * If a file with the identical name exists in that folder, it is deleted and overwritten with zero version history.
  */
@@ -77,49 +141,80 @@ export async function uploadFileToCandidateFolder(
   folderId: string,
   fileName: string,
   fileBuffer: Buffer,
-  mimeType: string = "application/pdf"
-): Promise<{ fileId: string; webViewLink: string }> {
+  mimeType: string = "application/pdf",
+  candidateContext?: { candidate_id?: string; full_name?: string }
+): Promise<{ fileId: string; webViewLink: string; resolvedFolderId?: string }> {
+  const env = getEnv();
+  const isDriveConfigured = Boolean(
+    (env.GOOGLE_PRIVATE_KEY && env.GOOGLE_PRIVATE_KEY.length > 50) ||
+    (env.GOOGLE_DRIVE_ROOT_FOLDER_ID && env.GOOGLE_DRIVE_ROOT_FOLDER_ID !== "your_google_drive_folder_id_here")
+  );
+
+  let targetFolderId = extractDriveFolderId(folderId || "").replace(/['\\]/g, "").trim();
+
+  // If Drive is configured and we have candidateContext, ensure a real folder exists
+  if (isDriveConfigured && candidateContext?.candidate_id) {
+    try {
+      targetFolderId = await ensureCandidateFolder(
+        candidateContext.full_name || "מועמד",
+        candidateContext.candidate_id,
+        targetFolderId
+      );
+    } catch (ensureErr) {
+      console.error("Could not ensure candidate folder before upload:", ensureErr);
+    }
+  }
+
   try {
     const drive = getDriveClient();
-    // 1. Check for existing file with the identical name in the folder
-    // Robustly sanitize search parameters against Drive search query injection
-    const sanitizedFolderId = extractDriveFolderId(folderId).replace(/['\\]/g, "");
     const sanitizedFileName = fileName.replace(/['\\]/g, "");
 
-    const searchResponse = await drive.files.list({
-      q: `'${sanitizedFolderId}' in parents and name = '${sanitizedFileName}' and trashed = false`,
-      fields: "files(id, name)",
-      spaces: "drive",
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-    });
+    // 1. Check for existing file with identical name in folder and overwrite cleanly
+    if (targetFolderId && !targetFolderId.startsWith("test_")) {
+      try {
+        const searchResponse = await drive.files.list({
+          q: `'${targetFolderId}' in parents and name = '${sanitizedFileName}' and trashed = false`,
+          fields: "files(id, name)",
+          spaces: "drive",
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+        });
 
-    const existingFiles = searchResponse.data.files || [];
-
-    // 2. Delete existing file(s) with identical name to ensure clean overwrite without version history
-    for (const existingFile of existingFiles) {
-      if (existingFile.id) {
-        try {
-          await drive.files.delete({
-            fileId: existingFile.id,
-            supportsAllDrives: true,
-          });
-        } catch {
-          // Continue if file was already removed
+        const existingFiles = searchResponse.data.files || [];
+        for (const existingFile of existingFiles) {
+          if (existingFile.id) {
+            try {
+              await drive.files.delete({
+                fileId: existingFile.id,
+                supportsAllDrives: true,
+              });
+            } catch {
+              // Ignore if already removed
+            }
+          }
+        }
+      } catch (listErr: any) {
+        console.warn(`Existing files check in folder ${targetFolderId}:`, listErr?.message);
+        // If folder not found (404) and candidateContext is available, recreate folder
+        if (candidateContext?.candidate_id && (listErr?.status === 404 || String(listErr?.message).includes("File not found"))) {
+          targetFolderId = await createCandidateFolder(
+            candidateContext.full_name || "מועמד",
+            candidateContext.candidate_id
+          );
         }
       }
     }
 
-    // 3. Prepare upload stream from buffer
+    // 2. Prepare upload stream from buffer
     const stream = new Readable();
     stream.push(fileBuffer);
     stream.push(null);
 
-    // 4. Create new file in folder
+    // 3. Create new file in folder using targetFolderId (NOT raw folderId)
     const createResponse = await drive.files.create({
       requestBody: {
         name: fileName,
-        parents: [folderId],
+        parents: [targetFolderId],
         mimeType,
       },
       media: {
@@ -142,10 +237,18 @@ export async function uploadFileToCandidateFolder(
     return {
       fileId,
       webViewLink,
+      resolvedFolderId: targetFolderId,
     };
-  } catch (error) {
-    // If Google Drive API is not configured or offline during testing, save locally in test store
-    console.warn(`Drive upload offline fallback for "${fileName}":`, error);
+  } catch (error: any) {
+    const errorMsg = error?.message || String(error);
+    console.error(`Drive upload error for "${fileName}":`, error);
+
+    // If Google Drive API is configured, DO NOT silently swallow!
+    if (isDriveConfigured) {
+      throw new Error(`שגיאה בשמירת המסמך "${fileName}" ב-Google Drive: ${errorMsg}`);
+    }
+
+    // Only fallback to local test storage in offline unconfigured local dev
     return saveLocalTestUpload(folderId, fileName, fileBuffer);
   }
 }

@@ -248,12 +248,23 @@ export async function POST(request: Request) {
 
     // 6. Upload to Candidate Google Drive Folder with overwrite
     const mimeType = file.type || (ext === ".pdf" ? "application/pdf" : "image/jpeg");
-    const { fileId, webViewLink } = await uploadFileToCandidateFolder(
+    const { fileId, webViewLink, resolvedFolderId } = await uploadFileToCandidateFolder(
       candidate.drive_folder_id,
       standardizedFileName,
       fileBuffer,
-      mimeType
+      mimeType,
+      { candidate_id: candidate.candidate_id, full_name: candidate.full_name }
     );
+
+    // If candidate Drive folder was resolved or created, update candidate record in Sheets
+    if (resolvedFolderId && resolvedFolderId !== candidate.drive_folder_id) {
+      try {
+        await sheetsRepository.updateCandidateDriveFolder(candidateId, resolvedFolderId);
+        candidate.drive_folder_id = resolvedFolderId;
+      } catch (folderUpdateErr) {
+        console.warn("Could not update candidate Drive folder ID in sheets:", folderUpdateErr);
+      }
+    }
 
     // 7. Update Candidate Checklist Item in Sheets
     await sheetsRepository.updateChecklistItem(candidateId, docTypeId, {
