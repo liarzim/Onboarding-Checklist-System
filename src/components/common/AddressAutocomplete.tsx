@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { MapPin, Search, ChevronDown, Check } from "lucide-react";
+import { MapPin, Search, Check } from "lucide-react";
 import { searchIsraeliCities } from "@/lib/geo/israeliCities";
 
 interface AddressAutocompleteProps {
@@ -38,6 +38,7 @@ export default function AddressAutocomplete({
   const [streetSuggestions, setStreetSuggestions] = useState<string[]>([]);
   const [showStreetDropdown, setShowStreetDropdown] = useState(false);
   const streetRef = useRef<HTMLDivElement>(null);
+  const streetDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sync external values
   useEffect(() => {
@@ -47,6 +48,15 @@ export default function AddressAutocomplete({
   useEffect(() => {
     setStreetInput(street);
   }, [street]);
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (streetDebounceRef.current) {
+        clearTimeout(streetDebounceRef.current);
+      }
+    };
+  }, []);
 
   // Click outside to close dropdowns
   useEffect(() => {
@@ -83,22 +93,24 @@ export default function AddressAutocomplete({
     onCityChange(selectedCity);
     setShowCityDropdown(false);
 
-    // Fetch streets for selected city
+    // Preload streets for selected city
     fetchStreetsForCity(selectedCity, "");
   }
 
-  // Update street search
+  // Update street search with slight debounce
   function handleStreetInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const val = e.target.value;
     setStreetInput(val);
     onStreetChange(val);
 
-    if (val.trim().length >= 1) {
-      fetchStreetsForCity(cityInput, val);
-      setShowStreetDropdown(true);
-    } else {
-      setShowStreetDropdown(false);
+    if (streetDebounceRef.current) {
+      clearTimeout(streetDebounceRef.current);
     }
+
+    streetDebounceRef.current = setTimeout(() => {
+      fetchStreetsForCity(cityInput, val);
+    }, 120);
+    setShowStreetDropdown(true);
   }
 
   function handleSelectStreet(selectedStreet: string) {
@@ -108,8 +120,9 @@ export default function AddressAutocomplete({
   }
 
   async function fetchStreetsForCity(targetCity: string, query: string) {
+    if (!targetCity) return;
     try {
-      const url = `/api/geo/streets?city=${encodeURIComponent(targetCity || "")}&q=${encodeURIComponent(
+      const url = `/api/geo/streets?city=${encodeURIComponent(targetCity)}&q=${encodeURIComponent(
         query || ""
       )}`;
       const res = await fetch(url);
@@ -121,7 +134,7 @@ export default function AddressAutocomplete({
         }
       }
     } catch {
-      // Ignore
+      // Ignore network errors in dropdown
     }
   }
 
@@ -182,6 +195,7 @@ export default function AddressAutocomplete({
             onFocus={() => {
               if (cityInput) {
                 fetchStreetsForCity(cityInput, streetInput);
+                setShowStreetDropdown(true);
               }
             }}
             placeholder={cityInput ? `רחוב ב${cityInput}` : "שם רחוב"}
