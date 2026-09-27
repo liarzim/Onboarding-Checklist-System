@@ -14,6 +14,7 @@ export async function GET() {
     const [vendors, stages] = await Promise.all([
       sheetsRepository.getVendors(),
       sheetsRepository.getSettingStages(),
+      sheetsRepository.ensureSheetHeaders().catch(() => {}),
     ]);
 
     return NextResponse.json({

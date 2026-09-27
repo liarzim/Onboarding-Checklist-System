@@ -148,7 +148,7 @@ export class SheetsRepository {
       const spreadsheetId = this.getSpreadsheetId();
       if (!spreadsheetId) return false;
 
-      this.ensureSheetHeaders().catch(() => {});
+      await this.ensureSheetHeaders().catch(() => {});
 
       const accessToken =
         candidate.access_token ||
@@ -235,7 +235,7 @@ export class SheetsRepository {
       const sheets = getSheetsClient();
       const spreadsheetId = this.getSpreadsheetId();
 
-      this.ensureSheetHeaders().catch(() => {});
+      await this.ensureSheetHeaders().catch(() => {});
 
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
