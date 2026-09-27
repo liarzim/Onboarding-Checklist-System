@@ -159,7 +159,7 @@ export async function POST(request: Request) {
 
       const dataPayload = [
         {
-          range: "Candidates!A1:P1",
+          range: "Candidates!A1:Q1",
           values: [
             [
               "candidate_id",
@@ -178,11 +178,12 @@ export async function POST(request: Request) {
               "token_expires_at",
               "is_signed_by_candidate",
               "signature_url",
+              "candidate_details",
             ],
           ],
         },
         {
-          range: "ChecklistItems!A1:H1",
+          range: "ChecklistItems!A1:I1",
           values: [
             [
               "checklist_item_id",
@@ -193,6 +194,7 @@ export async function POST(request: Request) {
               "file_drive_id",
               "file_drive_url",
               "updated_at",
+              "form_data",
             ],
           ],
         },

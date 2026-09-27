@@ -7,7 +7,7 @@ import {
   getDynamicGoogleConfig,
 } from "@/lib/dynamicConfig";
 import { assertAdminRole } from "@/lib/security";
-import { syncSystemSettingsToDynamicConfig } from "@/lib/repositories/sheetsRepository";
+import { syncSystemSettingsToDynamicConfig, sheetsRepository } from "@/lib/repositories/sheetsRepository";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +102,7 @@ export async function POST(request: Request) {
         );
         result.sheetsOk = true;
         result.sheetsDetails = `חובר בהצלחה לגיליון: "${title}" (נמצאו ${sheetTabs.length} לשוניות: ${sheetTabs.slice(0, 5).join(", ")}${sheetTabs.length > 5 ? "..." : ""})`;
+        await sheetsRepository.ensureSheetHeaders().catch(() => {});
       } catch (sheetError: any) {
         result.sheetsOk = false;
         const msg = sheetError?.message || "";

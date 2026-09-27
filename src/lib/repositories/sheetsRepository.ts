@@ -63,12 +63,60 @@ export interface ICandidatesFilter {
 }
 
 export class SheetsRepository {
+  private headersVerified = false;
+
   private getSpreadsheetId(): string {
     return getEnv().GOOGLE_SPREADSHEET_ID;
   }
 
   /**
-   * Fetches candidate list with optional filtering by vendor_id and is_completed status.
+   * Ensures that Column Q (candidate_details) in Candidates sheet
+   * and Column I (form_data) in ChecklistItems sheet exist in the spreadsheet headers.
+   * If missing, appends them automatically to row 1.
+   */
+  async ensureSheetHeaders(): Promise<void> {
+    if (this.headersVerified) return;
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
+      if (!spreadsheetId) return;
+
+      // 1. Check Candidates header row (A1:Q1)
+      const candHeaderRes = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CANDIDATES}!A1:Q1`,
+      });
+      const candHeaders = candHeaderRes.data.values?.[0] || [];
+      if (candHeaders.length > 0 && (!candHeaders[16] || String(candHeaders[16]).trim() === "")) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.CANDIDATES}!Q1`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: [["candidate_details"]] },
+        });
+      }
+
+      // 2. Check ChecklistItems header row (A1:I1)
+      const chkHeaderRes = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A1:I1`,
+      });
+      const chkHeaders = chkHeaderRes.data.values?.[0] || [];
+      if (chkHeaders.length > 0 && (!chkHeaders[8] || String(chkHeaders[8]).trim() === "")) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.CHECKLIST_ITEMS}!I1`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: [["form_data"]] },
+        });
+      }
+
+      this.headersVerified = true;
+    } catch (err) {
+      console.warn("ensureSheetHeaders offline or skipped:", err);
+    }
+  }
+
   /**
    * Appends candidate to Google Sheets Candidates tab.
    * Returns true if successfully written to Google Sheets, false otherwise.
@@ -78,6 +126,8 @@ export class SheetsRepository {
       const sheets = getSheetsClient();
       const spreadsheetId = this.getSpreadsheetId();
       if (!spreadsheetId) return false;
+
+      this.ensureSheetHeaders().catch(() => {});
 
       const accessToken =
         candidate.access_token ||
@@ -146,6 +196,8 @@ export class SheetsRepository {
     try {
       const sheets = getSheetsClient();
       const spreadsheetId = this.getSpreadsheetId();
+
+      this.ensureSheetHeaders().catch(() => {});
 
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
@@ -459,6 +511,8 @@ export class SheetsRepository {
     try {
       const sheets = getSheetsClient();
       const spreadsheetId = this.getSpreadsheetId();
+
+      await this.ensureSheetHeaders().catch(() => {});
 
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
