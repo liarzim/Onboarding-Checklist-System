@@ -10,8 +10,13 @@ import type {
   SettingStage,
   AuditLogEntry,
   AdminUser,
+  FormFieldSetting,
 } from "@/types/schema";
-import { CANDIDATE_EXTENDED_COLUMNS } from "@/types/schema";
+import {
+  CANDIDATE_EXTENDED_COLUMNS,
+  DEFAULT_FORM_FIELD_SETTINGS,
+  DEFAULT_DROPDOWN_OPTIONS,
+} from "@/types/schema";
 import { sanitizeSheetCellValue } from "../security";
 
 export const SHEET_NAMES = {
@@ -1987,6 +1992,58 @@ export class SheetsRepository {
     } catch (err) {
       console.warn("Could not save system setting to Google Sheets:", err);
     }
+  }
+
+  /**
+   * Retrieves required/optional form field settings for documents.
+   * Falls back to DEFAULT_FORM_FIELD_SETTINGS.
+   */
+  async getFormFieldSettings(): Promise<FormFieldSetting[]> {
+    try {
+      const settings = await this.getSystemSettings();
+      if (settings["form_field_settings"]) {
+        const parsed = JSON.parse(settings["form_field_settings"]);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (err) {
+      console.warn("Could not read form_field_settings from SystemSettings:", err);
+    }
+    return DEFAULT_FORM_FIELD_SETTINGS;
+  }
+
+  /**
+   * Saves required/optional form field settings to SystemSettings sheet.
+   */
+  async saveFormFieldSettings(fieldSettings: FormFieldSetting[]): Promise<void> {
+    await this.setSystemSetting("form_field_settings", JSON.stringify(fieldSettings));
+  }
+
+  /**
+   * Retrieves dynamic dropdown options for selection fields.
+   * Merges with DEFAULT_DROPDOWN_OPTIONS.
+   */
+  async getDropdownOptions(): Promise<Record<string, { label: string; options: string[] }>> {
+    try {
+      const settings = await this.getSystemSettings();
+      if (settings["dropdown_options"]) {
+        const parsed = JSON.parse(settings["dropdown_options"]);
+        if (parsed && typeof parsed === "object") {
+          return { ...DEFAULT_DROPDOWN_OPTIONS, ...parsed };
+        }
+      }
+    } catch (err) {
+      console.warn("Could not read dropdown_options from SystemSettings:", err);
+    }
+    return DEFAULT_DROPDOWN_OPTIONS;
+  }
+
+  /**
+   * Saves dynamic dropdown options to SystemSettings sheet.
+   */
+  async saveDropdownOptions(options: Record<string, { label: string; options: string[] }>): Promise<void> {
+    await this.setSystemSetting("dropdown_options", JSON.stringify(options));
   }
 }
 

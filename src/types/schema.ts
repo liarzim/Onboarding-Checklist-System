@@ -142,3 +142,130 @@ export const AdminUserSchema = z.object({
 });
 
 export type AdminUser = z.infer<typeof AdminUserSchema>;
+
+export interface FormFieldSetting {
+  doc_type_id: string;
+  field_key: string;
+  field_label: string;
+  section: string;
+  is_required: boolean;
+}
+
+export const DEFAULT_FORM_FIELD_SETTINGS: FormFieldSetting[] = [
+  // doc_1 fields
+  { doc_type_id: "doc_1", field_key: "first_name", field_label: "שם פרטי", section: "פרטים אישיים", is_required: true },
+  { doc_type_id: "doc_1", field_key: "last_name", field_label: "שם משפחה", section: "פרטים אישיים", is_required: true },
+  { doc_type_id: "doc_1", field_key: "name_en", field_label: "שם באנגלית", section: "פרטים אישיים", is_required: false },
+  { doc_type_id: "doc_1", field_key: "father_name", field_label: "שם האב", section: "פרטים אישיים", is_required: false },
+  { doc_type_id: "doc_1", field_key: "prev_last_name", field_label: "שם משפחה קודם", section: "פרטים אישיים", is_required: false },
+  { doc_type_id: "doc_1", field_key: "birth_date", field_label: "תאריך לידה", section: "פרטים אישיים", is_required: true },
+  { doc_type_id: "doc_1", field_key: "birth_country", field_label: "ארץ לידה", section: "פרטים אישיים", is_required: false },
+  { doc_type_id: "doc_1", field_key: "aliyah_year", field_label: "שנת עלייה", section: "פרטים אישיים", is_required: false },
+  { doc_type_id: "doc_1", field_key: "marital_status", field_label: "מצב משפחתי", section: "פרטים אישיים", is_required: false },
+  { doc_type_id: "doc_1", field_key: "gender", field_label: "מין", section: "פרטים אישיים", is_required: false },
+  { doc_type_id: "doc_1", field_key: "religion", field_label: "דת", section: "פרטים אישיים", is_required: false },
+  { doc_type_id: "doc_1", field_key: "other_citizenship", field_label: "אזרחות נוספת", section: "פרטים אישיים", is_required: false },
+  { doc_type_id: "doc_1", field_key: "city", field_label: "ישוב / עיר", section: "כתובת והתקשרות", is_required: true },
+  { doc_type_id: "doc_1", field_key: "street", field_label: "שם רחוב", section: "כתובת והתקשרות", is_required: true },
+  { doc_type_id: "doc_1", field_key: "house_number", field_label: "מספר בית", section: "כתובת והתקשרות", is_required: true },
+  { doc_type_id: "doc_1", field_key: "zip_code", field_label: "מיקוד", section: "כתובת והתקשרות", is_required: false },
+  { doc_type_id: "doc_1", field_key: "mobile_phone", field_label: "טלפון נייד", section: "כתובת והתקשרות", is_required: true },
+  { doc_type_id: "doc_1", field_key: "home_phone", field_label: "טלפון בבית", section: "כתובת והתקשרות", is_required: false },
+  { doc_type_id: "doc_1", field_key: "army_service", field_label: "סוג שירות צבאי / לאומי", section: "שירות צבאי / לאומי", is_required: false },
+  { doc_type_id: "doc_1", field_key: "military_id", field_label: "מספר אישי / צבאי", section: "שירות צבאי / לאומי", is_required: false },
+  { doc_type_id: "doc_1", field_key: "military_role", field_label: "תפקיד בשירות", section: "שירות צבאי / לאומי", is_required: false },
+  { doc_type_id: "doc_1", field_key: "military_years", field_label: "שנות שירות", section: "שירות צבאי / לאומי", is_required: false },
+  { doc_type_id: "doc_1", field_key: "exemption_reason", field_label: "סיבת פטור", section: "שירות צבאי / לאומי", is_required: false },
+  { doc_type_id: "doc_1", field_key: "education_high", field_label: "השכלה תיכונית", section: "השכלה ותעסוקה", is_required: false },
+  { doc_type_id: "doc_1", field_key: "education_academic", field_label: "השכלה אקדמית", section: "השכלה ותעסוקה", is_required: false },
+  { doc_type_id: "doc_1", field_key: "workplace1", field_label: "מקום עבודה אחרון", section: "השכלה ותעסוקה", is_required: false },
+  { doc_type_id: "doc_1", field_key: "workplace2", field_label: "מקום עבודה קודם", section: "השכלה ותעסוקה", is_required: false },
+  { doc_type_id: "doc_1", field_key: "ref1", field_label: "ממליץ 1", section: "השכלה ותעסוקה", is_required: false },
+  { doc_type_id: "doc_1", field_key: "ref2", field_label: "ממליץ 2", section: "השכלה ותעסוקה", is_required: false },
+
+  // doc_4 fields
+  { doc_type_id: "doc_4", field_key: "father_name", field_label: "שם האב", section: "פרטי מועמד", is_required: true },
+  { doc_type_id: "doc_4", field_key: "address", field_label: "כתובת מגורים מלאה", section: "פרטי מועמד", is_required: true },
+
+  // doc_9 fields
+  { doc_type_id: "doc_9", field_key: "name_en", field_label: "שם באנגלית (עבור הכרטיס)", section: "פרטי כרטיס עובד", is_required: false },
+  { doc_type_id: "doc_9", field_key: "role_in_project", field_label: "תפקיד מיועד בפרויקט", section: "פרטי כרטיס עובד", is_required: true },
+  { doc_type_id: "doc_9", field_key: "manager_name", field_label: "שם מנהל ישיר", section: "פרטי כרטיס עובד", is_required: false },
+  { doc_type_id: "doc_9", field_key: "start_date", field_label: "תאריך תחילת עבודה", section: "פרטי כרטיס עובד", is_required: false },
+  { doc_type_id: "doc_9", field_key: "previous_gov", field_label: "עבר בשירות המדינה", section: "פרטי כרטיס עובד", is_required: false },
+  { doc_type_id: "doc_9", field_key: "previous_dates", field_label: "תקופת שירות קודם במדינה", section: "פרטי כרטיס עובד", is_required: false },
+];
+
+export const DEFAULT_DROPDOWN_OPTIONS: Record<string, { label: string; options: string[] }> = {
+  marital_status: {
+    label: "מצב משפחתי",
+    options: ["רווק/ה", "נשוי/אה", "גרוש/ה", "אלמן/ה", "פרוד/ה", "ידוע/ה בציבור"],
+  },
+  gender: {
+    label: "מין",
+    options: ["זכר", "נקבה", "אחר"],
+  },
+  religion: {
+    label: "דת",
+    options: [
+      "יהודי/ת",
+      "מוסלמי/ת",
+      "נוצרי/ת",
+      "דרוזי/ת",
+      "צ'רקסי/ת",
+      "ללא סיווג דת",
+      "אחר",
+    ],
+  },
+  army_service: {
+    label: "סוג שירות צבאי / לאומי",
+    options: [
+      'שירות מלא בצה"ל',
+      'שירות חלקי בצה"ל',
+      "שירות לאומי / אזרחי",
+      "פטור משירות צבאי",
+      "אינו מחויב בגיוס",
+    ],
+  },
+  education_high: {
+    label: "השכלה תיכונית",
+    options: [
+      "תעודת בגרות מלאה",
+      "12 שנות לימוד ללא בגרות",
+      "תעודת בגרות חלקית",
+      "תעודה מקצועית / טכנולוגית",
+      'לימודים בחו"ל',
+    ],
+  },
+  education_academic: {
+    label: "השכלה אקדמית",
+    options: [
+      "ללא השכלה אקדמית",
+      "סטודנט/ית לתואר ראשון",
+      "תואר ראשון (B.A / B.Sc)",
+      "תואר שני (M.A / M.Sc / MBA)",
+      "תואר שלישי (Ph.D)",
+      "הנדסאי / לימודי תעודה",
+    ],
+  },
+  previous_gov: {
+    label: "העסקה קודמת במשרד ממשלתי",
+    options: ["לא", "כן"],
+  },
+  birth_country: {
+    label: "ארץ לידה",
+    options: [
+      "ישראל",
+      "ארצות הברית",
+      "רוסיה",
+      "אוקראינה",
+      "צרפת",
+      "בריטניה",
+      "ארגנטינה",
+      "אתיופיה",
+      "קנדה",
+      "אחר",
+    ],
+  },
+};
+

@@ -29,6 +29,10 @@ import {
 } from "@/lib/forms/declarationsFullText";
 import MediaUploadCard from "./MediaUploadCard";
 import { formatIsraeliPhone } from "@/lib/validation/phoneFormat";
+import DatePickerInput, { toDisplayDate, toStorageDate } from "@/components/common/DatePickerInput";
+import AddressAutocomplete from "@/components/common/AddressAutocomplete";
+import type { FormFieldSetting } from "@/types/schema";
+import { DEFAULT_FORM_FIELD_SETTINGS, DEFAULT_DROPDOWN_OPTIONS } from "@/types/schema";
 
 interface CandidateData {
   candidate_id: string;
@@ -199,6 +203,36 @@ export default function DigitalFormView({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPreviousDataLoaded, setIsPreviousDataLoaded] = useState(false);
+
+  // Dynamic Form Field Settings (required/optional) and Dropdown Options
+  const [formFieldSettings, setFormFieldSettings] = useState<FormFieldSetting[]>(DEFAULT_FORM_FIELD_SETTINGS);
+  const [dropdownOptions, setDropdownOptions] = useState(DEFAULT_DROPDOWN_OPTIONS);
+
+  useEffect(() => {
+    async function fetchFormConfig() {
+      try {
+        const [ffRes, ddRes] = await Promise.all([
+          fetch("/api/admin/settings/form-fields").catch(() => null),
+          fetch("/api/admin/settings/dropdowns").catch(() => null),
+        ]);
+        if (ffRes && ffRes.ok) {
+          const json = await ffRes.json();
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            setFormFieldSettings(json.data);
+          }
+        }
+        if (ddRes && ddRes.ok) {
+          const json = await ddRes.json();
+          if (json.success && json.data) {
+            setDropdownOptions((prev) => ({ ...prev, ...json.data }));
+          }
+        }
+      } catch (err) {
+        console.warn("Could not load dynamic form config:", err);
+      }
+    }
+    fetchFormConfig();
+  }, []);
 
   // doc_1 fields matching official government form
   const candidateParts = (candidate.full_name || "").trim().split(/\s+/);
@@ -478,23 +512,57 @@ export default function DigitalFormView({
       return;
     }
 
-    if (docTypeId === "doc_1") {
-      if (!q1FirstName.trim() || !q1LastName.trim()) {
-        setErrorMessage("נא למלא שם פרטי ושם משפחה בשאלון האישי.");
-        return;
-      }
-    }
+    // Dynamic Validation based on Admin Form Field Settings
+    const activeRequiredFields = (formFieldSettings || []).filter(
+      (f) => f.doc_type_id === docTypeId && f.is_required
+    );
 
-    if (docTypeId === "doc_4") {
-      if (!q4FatherName.trim() || !(q4Address || q1Address || q1City).trim()) {
-        setErrorMessage("נא למלא שם אב וכתובת מגורים מלאה בטופס הסכמה למסירת מידע פלילי.");
-        return;
-      }
-    }
+    const valuesByFieldKey: Record<string, string> = {
+      first_name: q1FirstName,
+      last_name: q1LastName,
+      first_name_en: q1FirstNameEn,
+      last_name_en: q1LastNameEn,
+      id_number: candidate.id_number,
+      birth_date: q1BirthDate,
+      birth_country: q1BirthCountry,
+      aliyah_year: q1AliyahYear,
+      marital_status: q1MaritalStatus,
+      other_citizenship: q1OtherCitizenship,
+      father_name: docTypeId === "doc_4" ? (q4FatherName || q1FatherName) : q1FatherName,
+      prev_last_name: q1PrevLastName,
+      gender: q1Gender,
+      religion: q1Religion,
+      address: docTypeId === "doc_4" ? (q4Address || q1Address || q1City) : (q1Address || q1City),
+      city: q1City,
+      street: q1Street,
+      house_number: q1HouseNumber,
+      zip_code: q1ZipCode,
+      home_phone: q1HomePhone,
+      mobile_phone: q1MobilePhone,
+      email: candidate.email,
+      army_service: q1ArmyService,
+      military_id: q1MilitaryId,
+      military_role: q1MilitaryRole,
+      military_years: q1MilitaryYears,
+      exemption_reason: q1ExemptionReason,
+      education_high: q1EducationHigh,
+      education_academic: q1EducationAcademic,
+      workplace1: q1Workplace1,
+      workplace2: q1Workplace2,
+      ref1: q1Ref1,
+      ref2: q1Ref2,
+      name_en: docTypeId === "doc_9" ? (q9NameEn || q1NameEn) : q1NameEn,
+      role_in_project: q9RoleInProject,
+      manager_name: q9ManagerName,
+      start_date: q9StartDate,
+      previous_gov: q9PreviousGov,
+      previous_dates: q9PreviousDates,
+    };
 
-    if (docTypeId === "doc_9") {
-      if (!q9RoleInProject.trim()) {
-        setErrorMessage("נא לציין את התפקיד המיועד בפרויקט עבור הנפקת הכרטיס.");
+    for (const reqField of activeRequiredFields) {
+      const val = (valuesByFieldKey[reqField.field_key] || "").trim();
+      if (!val) {
+        setErrorMessage(`שדה "${reqField.field_label}" הינו שדה חובה למילוי לפי הגדרות המערכת.`);
         return;
       }
     }
@@ -504,7 +572,7 @@ export default function DigitalFormView({
       q1LastName,
       q1FirstNameEn,
       q1LastNameEn,
-      q1BirthDate,
+      q1BirthDate: toStorageDate(q1BirthDate),
       q1BirthCountry,
       q1AliyahYear,
       q1MaritalStatus,
@@ -536,8 +604,8 @@ export default function DigitalFormView({
       q4Address: q4Address || q1Address || `${q1City}, ${q1Street} ${q1HouseNumber}`.trim(),
       q9NameEn: q9NameEn || q1NameEn,
       q9RoleInProject,
-      q9ManagerName,
-      q9StartDate,
+      managerName: q9ManagerName,
+      q9StartDate: toStorageDate(q9StartDate),
       q9PreviousGov,
       q9PreviousDates,
       signatureDataUrl,
@@ -602,7 +670,7 @@ export default function DigitalFormView({
         q1LastName,
         q1FirstNameEn,
         q1LastNameEn,
-        q1BirthDate,
+        q1BirthDate: toStorageDate(q1BirthDate),
         q1BirthCountry,
         q1AliyahYear,
         q1MaritalStatus,
@@ -635,7 +703,7 @@ export default function DigitalFormView({
         q9NameEn: q9NameEn || q1NameEn,
         q9RoleInProject,
         q9ManagerName,
-        q9StartDate,
+        q9StartDate: toStorageDate(q9StartDate),
         q9PreviousGov,
         q9PreviousDates,
         signatureDataUrl,
@@ -877,6 +945,30 @@ export default function DigitalFormView({
               setMobilePhone={setQ1MobilePhone}
               candidatePhone={candidate.phone}
               candidateEmail={candidate.email}
+              armyService={q1ArmyService}
+              setArmyService={setQ1ArmyService}
+              militaryId={q1MilitaryId}
+              setMilitaryId={setQ1MilitaryId}
+              militaryRole={q1MilitaryRole}
+              setMilitaryRole={setQ1MilitaryRole}
+              militaryYears={q1MilitaryYears}
+              setMilitaryYears={setQ1MilitaryYears}
+              exemptionReason={q1ExemptionReason}
+              setExemptionReason={setQ1ExemptionReason}
+              educationHigh={q1EducationHigh}
+              setEducationHigh={setQ1EducationHigh}
+              educationAcademic={q1EducationAcademic}
+              setEducationAcademic={setQ1EducationAcademic}
+              workplace1={q1Workplace1}
+              setWorkplace1={setQ1Workplace1}
+              workplace2={q1Workplace2}
+              setWorkplace2={setQ1Workplace2}
+              ref1={q1Ref1}
+              setRef1={setQ1Ref1}
+              ref2={q1Ref2}
+              setRef2={setQ1Ref2}
+              formFieldSettings={formFieldSettings}
+              dropdownOptions={dropdownOptions}
             />
           )}
 
@@ -886,7 +978,14 @@ export default function DigitalFormView({
               setFatherName={setQ4FatherName}
               address={q4Address}
               setAddress={setQ4Address}
+              city={q1City}
+              setCity={setQ1City}
+              street={q1Street}
+              setStreet={setQ1Street}
+              houseNumber={q1HouseNumber}
+              setHouseNumber={setQ1HouseNumber}
               docInfo={docInfo}
+              formFieldSettings={formFieldSettings}
             />
           )}
 
@@ -905,6 +1004,8 @@ export default function DigitalFormView({
               previousDates={q9PreviousDates}
               setPreviousDates={setQ9PreviousDates}
               candidate={candidate}
+              formFieldSettings={formFieldSettings}
+              dropdownOptions={dropdownOptions}
             />
           )}
 
@@ -1220,7 +1321,7 @@ export default function DigitalFormView({
                   prevLastName={q1PrevLastName}
                   gender={q1Gender}
                   religion={q1Religion}
-                  birthDate={q1BirthDate}
+                  birthDate={toDisplayDate(q1BirthDate)}
                   birthCountry={q1BirthCountry}
                   aliyahYear={q1AliyahYear}
                   maritalStatus={q1MaritalStatus}
@@ -1249,7 +1350,7 @@ export default function DigitalFormView({
                   nameEn={q9NameEn}
                   roleInProject={q9RoleInProject}
                   managerName={q9ManagerName}
-                  startDate={q9StartDate}
+                  startDate={toDisplayDate(q9StartDate)}
                   previousGov={q9PreviousGov}
                   previousDates={q9PreviousDates}
                   docInfo={docInfo}
@@ -1398,7 +1499,97 @@ function Doc1DedicatedInputForm({
   setMobilePhone,
   candidatePhone,
   candidateEmail,
+  armyService,
+  setArmyService,
+  militaryId,
+  setMilitaryId,
+  militaryRole,
+  setMilitaryRole,
+  militaryYears,
+  setMilitaryYears,
+  exemptionReason,
+  setExemptionReason,
+  educationHigh,
+  setEducationHigh,
+  educationAcademic,
+  setEducationAcademic,
+  workplace1,
+  setWorkplace1,
+  workplace2,
+  setWorkplace2,
+  ref1,
+  setRef1,
+  ref2,
+  setRef2,
+  formFieldSettings,
+  dropdownOptions,
 }: any) {
+  const isReq = (key: string) => {
+    const f = (formFieldSettings || []).find(
+      (s: any) => s.doc_type_id === "doc_1" && s.field_key === key
+    );
+    return f ? f.is_required : false;
+  };
+
+  const maritalOptions = dropdownOptions?.marital_status?.options || [
+    "רווק/ה",
+    "נשוי/אה",
+    "גרוש/ה",
+    "אלמן/ה",
+    "פרוד/ה",
+    "ידוע/ה בציבור",
+  ];
+
+  const genderOptions = dropdownOptions?.gender?.options || ["זכר", "נקבה", "אחר"];
+
+  const religionOptions = dropdownOptions?.religion?.options || [
+    "יהודי/ת",
+    "מוסלמי/ת",
+    "נוצרי/ת",
+    "דרוזי/ת",
+    "צ'רקסי/ת",
+    "ללא סיווג דת",
+    "אחר",
+  ];
+
+  const birthCountryOptions = dropdownOptions?.birth_country?.options || [
+    "ישראל",
+    "ארצות הברית",
+    "רוסיה",
+    "אוקראינה",
+    "צרפת",
+    "בריטניה",
+    "ארגנטינה",
+    "אתיופיה",
+    "קנדה",
+    "אחר",
+  ];
+
+  const armyOptions = dropdownOptions?.army_service?.options || [
+    'שירות מלא בצה"ל',
+    'שירות חלקי בצה"ל',
+    "שירות לאומי / אזרחי",
+    "פטור משירות צבאי",
+    "אינו מחויב בגיוס",
+  ];
+
+  const eduHighOptions = dropdownOptions?.education_high?.options || [
+    "תעודת בגרות מלאה",
+    "12 שנות לימוד ללא בגרות",
+    "תעודת בגרות חלקית",
+    "תעודה מקצועית / טכנולוגית",
+    'לימודים בחו"ל',
+  ];
+
+  const eduAcademicOptions = dropdownOptions?.education_academic?.options || [
+    "ללא השכלה אקדמית",
+    "סטודנט/ית לתואר ראשון",
+    "תואר ראשון (B.A / B.Sc)",
+    "תואר שני (M.A / M.Sc / MBA)",
+    "תואר שלישי (Ph.D)",
+    "הנדסאי / לימודי תעודה",
+  ];
+
   return (
     <div className="space-y-6">
       {/* Section 1: Personal Details */}
@@ -1409,53 +1600,65 @@ function Doc1DedicatedInputForm({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs sm:text-sm">
           <div>
-            <label className="font-bold text-slate-700 block mb-1">שם משפחה בעברית *</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              שם משפחה בעברית {isReq("last_name") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
               placeholder="משפחה"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-bold"
-              required
+              required={isReq("last_name")}
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">שם פרטי בעברית *</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              שם פרטי בעברית {isReq("first_name") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
               placeholder="פרטי"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-bold"
-              required
+              required={isReq("first_name")}
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">שם האב</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              שם האב {isReq("father_name") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={fatherName}
               onChange={(e) => setFatherName(e.target.value)}
               placeholder="שם פרטי של האב"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("father_name")}
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">שם משפחה קודם/נוסף</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              שם משפחה קודם/נוסף {isReq("prev_last_name") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={prevLastName}
               onChange={(e) => setPrevLastName(e.target.value)}
               placeholder="אם קיים"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("prev_last_name")}
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">שם משפחה באנגלית (Last Name)</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              שם משפחה באנגלית (Last Name) {isReq("last_name_en") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={lastNameEn}
@@ -1463,11 +1666,14 @@ function Doc1DedicatedInputForm({
               placeholder="Last Name"
               dir="ltr"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("last_name_en")}
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">שם פרטי באנגלית (First Name)</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              שם פרטי באנגלית (First Name) {isReq("first_name_en") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={firstNameEn}
@@ -1475,88 +1681,113 @@ function Doc1DedicatedInputForm({
               placeholder="First Name"
               dir="ltr"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("first_name_en")}
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">מין</label>
-            <div className="flex gap-4 p-2 bg-slate-50 rounded-xl border border-slate-200">
-              <label className="flex items-center gap-1.5 cursor-pointer font-semibold text-xs">
-                <input
-                  type="radio"
-                  name="q1GenderInput"
-                  value="זכר"
-                  checked={gender === "זכר"}
-                  onChange={() => setGender("זכר")}
-                />
-                <span>זכר</span>
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer font-semibold text-xs">
-                <input
-                  type="radio"
-                  name="q1GenderInput"
-                  value="נקבה"
-                  checked={gender === "נקבה"}
-                  onChange={() => setGender("נקבה")}
-                />
-                <span>נקבה</span>
-              </label>
-            </div>
+            <label className="font-bold text-slate-700 block mb-1">
+              מין {isReq("gender") && <span className="text-rose-500">*</span>}
+            </label>
+            <select
+              value={gender}
+              onChange={(e) => setGender(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-semibold"
+            >
+              {genderOptions.map((opt: string) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">דת</label>
-            <input
-              type="text"
+            <label className="font-bold text-slate-700 block mb-1">
+              דת {isReq("religion") && <span className="text-rose-500">*</span>}
+            </label>
+            <select
               value={religion}
               onChange={(e) => setReligion(e.target.value)}
-              placeholder="יהודי/ת"
-              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
-            />
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-semibold"
+            >
+              {religionOptions.map((opt: string) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">תאריך לידה (DD/MM/YYYY)</label>
-            <input
-              type="text"
+            <DatePickerInput
+              id="q1_birth_date"
+              label="תאריך לידה"
               value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
-              placeholder="למשל 15/05/1990"
-              dir="ltr"
-              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-mono"
+              onChange={setBirthDate}
+              required={isReq("birth_date")}
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">ארץ לידה</label>
-            <input
-              type="text"
+            <label className="font-bold text-slate-700 block mb-1">
+              ארץ לידה {isReq("birth_country") && <span className="text-rose-500">*</span>}
+            </label>
+            <select
               value={birthCountry}
               onChange={(e) => setBirthCountry(e.target.value)}
-              placeholder="ישראל"
-              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
-            />
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-semibold"
+            >
+              {birthCountryOptions.map((opt: string) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">שנת עלייה (אם רלוונטי)</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              שנת עלייה (אם רלוונטי) {isReq("aliyah_year") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={aliyahYear}
               onChange={(e) => setAliyahYear(e.target.value)}
               placeholder="יליד הארץ"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("aliyah_year")}
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">אזרחות נוספת או מעמד תושב קבע</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              מצב משפחתי {isReq("marital_status") && <span className="text-rose-500">*</span>}
+            </label>
+            <select
+              value={maritalStatus}
+              onChange={(e) => setMaritalStatus(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-semibold"
+            >
+              {maritalOptions.map((opt: string) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="font-bold text-slate-700 block mb-1">
+              אזרחות נוספת או מעמד תושב קבע {isReq("other_citizenship") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={otherCitizenship}
               onChange={(e) => setOtherCitizenship(e.target.value)}
               placeholder="ללא"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("other_citizenship")}
             />
           </div>
         </div>
@@ -1568,42 +1799,35 @@ function Doc1DedicatedInputForm({
           חלק ב': כתובת נוכחית ופרטי התקשרות
         </h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs sm:text-sm">
-          <div>
-            <label className="font-bold text-slate-700 block mb-1">ישוב / עיר</label>
-            <input
-              type="text"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="שם הישוב"
-              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-bold"
-            />
-          </div>
+        {/* Israeli Cities & Streets Official Autocomplete */}
+        <AddressAutocomplete
+          city={city}
+          street={street}
+          onCityChange={setCity}
+          onStreetChange={setStreet}
+          cityRequired={isReq("city")}
+          streetRequired={isReq("street")}
+        />
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs sm:text-sm mt-3">
           <div>
-            <label className="font-bold text-slate-700 block mb-1">שם רחוב</label>
-            <input
-              type="text"
-              value={street}
-              onChange={(e) => setStreet(e.target.value)}
-              placeholder="רחוב"
-              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="font-bold text-slate-700 block mb-1">מספר בית / דירה</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              מספר בית / דירה {isReq("house_number") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={houseNumber}
               onChange={(e) => setHouseNumber(e.target.value)}
               placeholder="מספר"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("house_number")}
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">מיקוד</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              מיקוד {isReq("zip_code") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={zipCode}
@@ -1611,11 +1835,14 @@ function Doc1DedicatedInputForm({
               placeholder="מיקוד"
               dir="ltr"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-mono"
+              required={isReq("zip_code")}
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">טלפון נייד (פורמט ישראלי אחיד)</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              טלפון נייד (פורמט ישראלי אחיד) {isReq("mobile_phone") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={mobilePhone}
@@ -1624,11 +1851,14 @@ function Doc1DedicatedInputForm({
               placeholder="05X-XXXXXXX"
               dir="ltr"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-mono font-bold"
+              required={isReq("mobile_phone")}
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">טלפון בבית</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              טלפון בבית {isReq("home_phone") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={homePhone}
@@ -1637,10 +1867,11 @@ function Doc1DedicatedInputForm({
               placeholder="0X-XXXXXXX"
               dir="ltr"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-mono"
+              required={isReq("home_phone")}
             />
           </div>
 
-          <div className="md:col-span-2">
+          <div className="md:col-span-4">
             <label className="font-bold text-slate-700 block mb-1">דואר אלקטרוני</label>
             <input
               type="email"
@@ -1648,6 +1879,191 @@ function Doc1DedicatedInputForm({
               disabled
               dir="ltr"
               className="w-full border border-slate-200 rounded-xl p-2.5 text-sm bg-slate-50 font-mono text-slate-700"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Section 3: Military / National Service */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+        <h3 className="font-bold text-base text-slate-900 border-b border-slate-100 pb-2">
+          חלק ג': שירות צבאי / שירות לאומי
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs sm:text-sm">
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">
+              סוג שירות צבאי / לאומי {isReq("army_service") && <span className="text-rose-500">*</span>}
+            </label>
+            <select
+              value={armyService}
+              onChange={(e) => setArmyService(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-semibold"
+            >
+              {armyOptions.map((opt: string) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">
+              מספר אישי בצה"ל {isReq("military_id") && <span className="text-rose-500">*</span>}
+            </label>
+            <input
+              type="text"
+              value={militaryId}
+              onChange={(e) => setMilitaryId(e.target.value)}
+              placeholder="אם רלוונטי"
+              dir="ltr"
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-mono"
+              required={isReq("military_id")}
+            />
+          </div>
+
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">
+              מקצוע צבאי / תפקיד {isReq("military_role") && <span className="text-rose-500">*</span>}
+            </label>
+            <input
+              type="text"
+              value={militaryRole}
+              onChange={(e) => setMilitaryRole(e.target.value)}
+              placeholder="תפקיד / מקצוע"
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("military_role")}
+            />
+          </div>
+
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">
+              תקופת שירות (שנים) {isReq("military_years") && <span className="text-rose-500">*</span>}
+            </label>
+            <input
+              type="text"
+              value={militaryYears}
+              onChange={(e) => setMilitaryYears(e.target.value)}
+              placeholder="למשל: 2018-2021"
+              dir="ltr"
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("military_years")}
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="font-bold text-slate-700 block mb-1">
+              סיבת פטור / אי שירות {isReq("exemption_reason") && <span className="text-rose-500">*</span>}
+            </label>
+            <input
+              type="text"
+              value={exemptionReason}
+              onChange={(e) => setExemptionReason(e.target.value)}
+              placeholder="במידה ולא שירתת או קיבלת פטור"
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("exemption_reason")}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Section 4: Education & Employment */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+        <h3 className="font-bold text-base text-slate-900 border-b border-slate-100 pb-2">
+          חלק ד': השכלה, תעסוקה וממליצים
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs sm:text-sm">
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">
+              השכלה תיכונית {isReq("education_high") && <span className="text-rose-500">*</span>}
+            </label>
+            <select
+              value={educationHigh}
+              onChange={(e) => setEducationHigh(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-semibold"
+            >
+              <option value="">בחר השכלה תיכונית...</option>
+              {eduHighOptions.map((opt: string) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">
+              השכלה אקדמית {isReq("education_academic") && <span className="text-rose-500">*</span>}
+            </label>
+            <select
+              value={educationAcademic}
+              onChange={(e) => setEducationAcademic(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-semibold"
+            >
+              <option value="">בחר השכלה אקדמית...</option>
+              {eduAcademicOptions.map((opt: string) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">
+              מקום עבודה אחרון (חברה ותפקיד) {isReq("workplace1") && <span className="text-rose-500">*</span>}
+            </label>
+            <input
+              type="text"
+              value={workplace1}
+              onChange={(e) => setWorkplace1(e.target.value)}
+              placeholder="חברה, תפקיד ותקופה"
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("workplace1")}
+            />
+          </div>
+
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">
+              מקום עבודה קודם {isReq("workplace2") && <span className="text-rose-500">*</span>}
+            </label>
+            <input
+              type="text"
+              value={workplace2}
+              onChange={(e) => setWorkplace2(e.target.value)}
+              placeholder="חברה ותפקיד"
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("workplace2")}
+            />
+          </div>
+
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">
+              ממליץ 1 (שם, תפקיד וטלפון) {isReq("ref1") && <span className="text-rose-500">*</span>}
+            </label>
+            <input
+              type="text"
+              value={ref1}
+              onChange={(e) => setRef1(e.target.value)}
+              placeholder="שם מלא, תפקיד וטלפון"
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("ref1")}
+            />
+          </div>
+
+          <div>
+            <label className="font-bold text-slate-700 block mb-1">
+              ממליץ 2 (שם, תפקיד וטלפון) {isReq("ref2") && <span className="text-rose-500">*</span>}
+            </label>
+            <input
+              type="text"
+              value={ref2}
+              onChange={(e) => setRef2(e.target.value)}
+              placeholder="שם מלא, תפקיד וטלפון"
+              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("ref2")}
             />
           </div>
         </div>
@@ -1661,8 +2077,22 @@ function Doc4DedicatedInputForm({
   setFatherName,
   address,
   setAddress,
+  city,
+  setCity,
+  street,
+  setStreet,
+  houseNumber,
+  setHouseNumber,
   docInfo,
+  formFieldSettings,
 }: any) {
+  const isReq = (key: string) => {
+    const f = (formFieldSettings || []).find(
+      (s: any) => s.doc_type_id === "doc_4" && s.field_key === key
+    );
+    return f ? f.is_required : false;
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
@@ -1673,29 +2103,54 @@ function Doc4DedicatedInputForm({
           בהתאם לחוק המידע הפלילי ותקנת השבים, התשע"ט-2019, נדרש לציין את שם האב וכתובת המגורים העדכנית לצורך אימות מול משטרת ישראל.
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs sm:text-sm">
+        <div className="space-y-4 text-xs sm:text-sm">
           <div>
-            <label className="font-bold text-slate-700 block mb-1">שם האב *</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              שם האב {isReq("father_name") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={fatherName}
               onChange={(e) => setFatherName(e.target.value)}
               placeholder="שם פרטי של האב"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-bold"
-              required
+              required={isReq("father_name")}
             />
           </div>
 
-          <div>
-            <label className="font-bold text-slate-700 block mb-1">כתובת מגורים עדכנית ומלאה *</label>
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="עיר, רחוב ומספר בית"
-              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-bold"
-              required
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+            <div className="text-xs font-bold text-slate-800">
+              כתובת מגורים עדכנית ומלאה (חיפוש ישוב ורחוב רשמיים):
+            </div>
+            <AddressAutocomplete
+              city={city}
+              street={street}
+              onCityChange={(c) => {
+                setCity(c);
+                const full = `${c}, ${street || ""} ${houseNumber || ""}`.trim();
+                setAddress(full);
+              }}
+              onStreetChange={(s) => {
+                setStreet(s);
+                const full = `${city || ""} ${s} ${houseNumber || ""}`.trim();
+                setAddress(full);
+              }}
+              cityRequired={isReq("address")}
+              streetRequired={isReq("address")}
             />
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">
+                כתובת מלאה כפי שתוטמע בטופס {isReq("address") && <span className="text-rose-500">*</span>}
+              </label>
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="עיר, רחוב ומספר בית"
+                className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-bold"
+                required={isReq("address")}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -1728,7 +2183,18 @@ function Doc9DedicatedInputForm({
   previousDates,
   setPreviousDates,
   candidate,
+  formFieldSettings,
+  dropdownOptions,
 }: any) {
+  const isReq = (key: string) => {
+    const f = (formFieldSettings || []).find(
+      (s: any) => s.doc_type_id === "doc_9" && s.field_key === key
+    );
+    return f ? f.is_required : false;
+  };
+
+  const prevGovOptions = dropdownOptions?.previous_gov?.options || ["לא", "כן"];
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
@@ -1738,7 +2204,9 @@ function Doc9DedicatedInputForm({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs sm:text-sm">
           <div>
-            <label className="font-bold text-slate-700 block mb-1">שם פרטי ומשפחה באנגלית (Full Name in English)</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              שם פרטי ומשפחה באנגלית (Full Name in English) {isReq("name_en") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={nameEn}
@@ -1746,47 +2214,51 @@ function Doc9DedicatedInputForm({
               placeholder="First and Last Name in English"
               dir="ltr"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-bold"
+              required={isReq("name_en")}
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">תפקיד מיועד בפרויקט *</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              תפקיד מיועד בפרויקט {isReq("role_in_project") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={roleInProject}
               onChange={(e) => setRoleInProject(e.target.value)}
               placeholder="למשל: יועץ אבטחת מידע / מפתח Fullstack"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-bold"
-              required
+              required={isReq("role_in_project")}
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">שם מנהל ישיר / מוביל פרויקט מאשר</label>
+            <label className="font-bold text-slate-700 block mb-1">
+              שם מנהל ישיר / מוביל פרויקט מאשר {isReq("manager_name") && <span className="text-rose-500">*</span>}
+            </label>
             <input
               type="text"
               value={managerName}
               onChange={(e) => setManagerName(e.target.value)}
               placeholder="שם מלא של המנהל/ת"
               className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+              required={isReq("manager_name")}
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">תאריך תחילת העסקה</label>
-            <input
-              type="text"
+            <DatePickerInput
+              id="q9_start_date"
+              label="תאריך תחילת העסקה"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              placeholder="DD/MM/YYYY"
-              dir="ltr"
-              className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-mono"
+              onChange={setStartDate}
+              required={isReq("start_date")}
             />
           </div>
 
           <div className="sm:col-span-2">
             <label className="font-bold text-slate-700 block mb-1">
-              העסקה קודמת במשרד ממשלתי
+              העסקה קודמת במשרד ממשלתי {isReq("previous_gov") && <span className="text-rose-500">*</span>}
             </label>
             <div className="flex flex-col sm:flex-row gap-3">
               <select
@@ -1794,8 +2266,11 @@ function Doc9DedicatedInputForm({
                 onChange={(e) => setPreviousGov(e.target.value)}
                 className="border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 font-bold"
               >
-                <option value="לא">לא</option>
-                <option value="כן">כן</option>
+                {prevGovOptions.map((opt: string) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
               </select>
 
               {previousGov === "כן" && (
@@ -1805,6 +2280,7 @@ function Doc9DedicatedInputForm({
                   onChange={(e) => setPreviousDates(e.target.value)}
                   placeholder="פרט משרד ושנים (למשל: משרד המשפטים, 2021-2023)"
                   className="flex-1 border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                  required={isReq("previous_dates")}
                 />
               )}
             </div>

@@ -39,11 +39,15 @@ import {
   FileEdit,
   Camera,
   Image as ImageIcon,
+  ListFilter,
 } from "lucide-react";
 import FormEditorModal from "@/components/forms/FormEditorModal";
 import FormPreviewModal from "@/components/forms/FormPreviewModal";
+import FormFieldsSettingsTab from "@/components/admin/FormFieldsSettingsTab";
+import DropdownsSettingsTab from "@/components/admin/DropdownsSettingsTab";
 import { DEFAULT_UPLOAD_POLICY, type UploadPolicyConfig } from "@/lib/uploadPolicyTypes";
-import type { SettingStage, DocumentType, Vendor, AdminUser } from "@/types/schema";
+import type { SettingStage, DocumentType, Vendor, AdminUser, FormFieldSetting } from "@/types/schema";
+import { DEFAULT_FORM_FIELD_SETTINGS, DEFAULT_DROPDOWN_OPTIONS } from "@/types/schema";
 
 const FALLBACK_DOCUMENTS: DocumentType[] = [
   { doc_type_id: "doc_1", doc_name: "שאלון אישי רמה 5", is_required: true, order_index: 1, template_drive_url: "" },
@@ -71,7 +75,7 @@ const FALLBACK_PROJECTS = ["פרויקט אלפא", "פרויקט סייבר", "
 
 export default function AdminSettingsPage() {
   const [activeTab, setActiveTab] = useState<
-    "stages" | "documents" | "vendors" | "projects" | "admins" | "google"
+    "stages" | "documents" | "form_fields" | "dropdowns" | "vendors" | "projects" | "admins" | "google"
   >("stages");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -79,7 +83,7 @@ export default function AdminSettingsPage() {
 
   // Helper to change tab and persist to URL and localStorage
   function handleTabChange(
-    tab: "stages" | "documents" | "vendors" | "projects" | "admins" | "google"
+    tab: "stages" | "documents" | "form_fields" | "dropdowns" | "vendors" | "projects" | "admins" | "google"
   ) {
     setActiveTab(tab);
     if (typeof window !== "undefined") {
@@ -100,6 +104,12 @@ export default function AdminSettingsPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [projects, setProjects] = useState<string[]>(FALLBACK_PROJECTS);
   const [admins, setAdmins] = useState<AdminUser[]>([]);
+
+  // Form Field Settings & Dropdowns State
+  const [formFieldSettings, setFormFieldSettings] = useState<FormFieldSetting[]>(DEFAULT_FORM_FIELD_SETTINGS);
+  const [dropdownOptions, setDropdownOptions] = useState<Record<string, { label: string; options: string[] }>>(DEFAULT_DROPDOWN_OPTIONS);
+  const [savingFormFields, setSavingFormFields] = useState(false);
+  const [savingDropdowns, setSavingDropdowns] = useState(false);
 
   // Template Preview & Editor Modals State
   const [previewModalDocId, setPreviewModalDocId] = useState<string | null>(null);
@@ -225,7 +235,11 @@ export default function AdminSettingsPage() {
     setLoading(true);
     setMessage(null);
     try {
-      const res = await fetch("/api/admin/settings");
+      const [res, formFieldsRes, dropdownsRes] = await Promise.all([
+        fetch("/api/admin/settings"),
+        fetch("/api/admin/settings/form-fields").catch(() => null),
+        fetch("/api/admin/settings/dropdowns").catch(() => null),
+      ]);
       const json = await res.json();
       if (res.ok && json.success) {
         setStages(
@@ -254,6 +268,20 @@ export default function AdminSettingsPage() {
           text: json.message || "שגיאה בטעינת נתוני הגדרות, נטענו נתוני ברירת מחדל",
         });
       }
+
+      if (formFieldsRes && formFieldsRes.ok) {
+        const ffJson = await formFieldsRes.json();
+        if (ffJson.success && Array.isArray(ffJson.data) && ffJson.data.length > 0) {
+          setFormFieldSettings(ffJson.data);
+        }
+      }
+
+      if (dropdownsRes && dropdownsRes.ok) {
+        const ddJson = await dropdownsRes.json();
+        if (ddJson.success && ddJson.data) {
+          setDropdownOptions(ddJson.data);
+        }
+      }
     } catch {
       setStages(FALLBACK_STAGES);
       setDocuments(FALLBACK_DOCUMENTS);
@@ -264,6 +292,72 @@ export default function AdminSettingsPage() {
       });
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSaveFormFieldSettings(updatedSettings: FormFieldSetting[]) {
+    setSavingFormFields(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/settings/form-fields", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: updatedSettings }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setFormFieldSettings(json.data);
+        setMessage({
+          type: "success",
+          text: "הגדרות שדות החובה והרשות בטפסים נשמרו בהצלחה",
+        });
+      } else {
+        setMessage({
+          type: "error",
+          text: json.message || "שגיאה בשמירת הגדרות שדות הטפסים",
+        });
+      }
+    } catch {
+      setMessage({
+        type: "error",
+        text: "שגיאת תקשורת בשמירת הגדרות שדות הטפסים",
+      });
+    } finally {
+      setSavingFormFields(false);
+    }
+  }
+
+  async function handleSaveDropdownOptions(
+    updatedOptions: Record<string, { label: string; options: string[] }>
+  ) {
+    setSavingDropdowns(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/settings/dropdowns", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ options: updatedOptions }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setDropdownOptions(json.data);
+        setMessage({
+          type: "success",
+          text: "רשימות הבחירה עודכנו ונשמרו בהצלחה",
+        });
+      } else {
+        setMessage({
+          type: "error",
+          text: json.message || "שגיאה בשמירת רשימות הבחירה",
+        });
+      }
+    } catch {
+      setMessage({
+        type: "error",
+        text: "שגיאת תקשורת בשמירת רשימות הבחירה",
+      });
+    } finally {
+      setSavingDropdowns(false);
     }
   }
 
@@ -1084,6 +1178,30 @@ export default function AdminSettingsPage() {
         </button>
 
         <button
+          onClick={() => handleTabChange("form_fields")}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+            activeTab === "form_fields"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
+          <span>שדות חובה ורשות ({formFieldSettings.length})</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange("dropdowns")}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+            activeTab === "dropdowns"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+          }`}
+        >
+          <ListFilter className="w-4 h-4 text-purple-600" />
+          <span>רשימות בחירה נפתחות ({Object.keys(dropdownOptions).length})</span>
+        </button>
+
+        <button
           onClick={() => handleTabChange("vendors")}
           className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
             activeTab === "vendors"
@@ -1421,6 +1539,36 @@ export default function AdminSettingsPage() {
                   </table>
                 </div>
               </div>
+            )}
+
+            {/* TAB: FORM FIELD SETTINGS (REQUIRED / OPTIONAL) */}
+            {activeTab === "form_fields" && (
+              <FormFieldsSettingsTab
+                settings={formFieldSettings}
+                onSave={handleSaveFormFieldSettings}
+                saving={savingFormFields}
+                onResetToDefault={() => {
+                  if (confirm("האם לאפס את כל הגדרות שדות הטפסים לברירת המחדל?")) {
+                    setFormFieldSettings(DEFAULT_FORM_FIELD_SETTINGS);
+                    handleSaveFormFieldSettings(DEFAULT_FORM_FIELD_SETTINGS);
+                  }
+                }}
+              />
+            )}
+
+            {/* TAB: DROPDOWNS SETTINGS */}
+            {activeTab === "dropdowns" && (
+              <DropdownsSettingsTab
+                options={dropdownOptions}
+                onSave={handleSaveDropdownOptions}
+                saving={savingDropdowns}
+                onResetToDefault={() => {
+                  if (confirm("האם לאפס את כל רשימות הבחירה לברירת המחדל המקורית?")) {
+                    setDropdownOptions(DEFAULT_DROPDOWN_OPTIONS);
+                    handleSaveDropdownOptions(DEFAULT_DROPDOWN_OPTIONS);
+                  }
+                }}
+              />
             )}
 
             {/* TAB 3: VENDORS */}
