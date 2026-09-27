@@ -8,6 +8,7 @@ import {
   extractDriveFolderId,
 } from "@/lib/dynamicConfig";
 import { assertAdminRole } from "@/lib/security";
+import { CANDIDATE_EXTENDED_COLUMNS } from "@/types/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -159,7 +160,7 @@ export async function POST(request: Request) {
 
       const dataPayload = [
         {
-          range: "Candidates!A1:Q1",
+          range: "Candidates!A1:AY1",
           values: [
             [
               "candidate_id",
@@ -178,7 +179,7 @@ export async function POST(request: Request) {
               "token_expires_at",
               "is_signed_by_candidate",
               "signature_url",
-              "candidate_details",
+              ...CANDIDATE_EXTENDED_COLUMNS.map((col) => col.label),
             ],
           ],
         },

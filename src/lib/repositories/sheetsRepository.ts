@@ -11,6 +11,7 @@ import type {
   AuditLogEntry,
   AdminUser,
 } from "@/types/schema";
+import { CANDIDATE_EXTENDED_COLUMNS } from "@/types/schema";
 import { sanitizeSheetCellValue } from "../security";
 
 export const SHEET_NAMES = {
@@ -81,18 +82,38 @@ export class SheetsRepository {
       const spreadsheetId = this.getSpreadsheetId();
       if (!spreadsheetId) return;
 
-      // 1. Check Candidates header row (A1:Q1)
+      // 1. Check Candidates header row (A1:AY1)
       const candHeaderRes = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${SHEET_NAMES.CANDIDATES}!A1:Q1`,
+        range: `${SHEET_NAMES.CANDIDATES}!A1:AY1`,
       });
       const candHeaders = candHeaderRes.data.values?.[0] || [];
-      if (candHeaders.length > 0 && (!candHeaders[16] || String(candHeaders[16]).trim() === "")) {
+      if (candHeaders.length < 51 || !candHeaders[16] || String(candHeaders[16]).trim() === "") {
+        const fullHeaders = [
+          "candidate_id",
+          "full_name",
+          "id_number",
+          "email",
+          "phone",
+          "vendor_id",
+          "project_id",
+          "drive_folder_id",
+          "current_stage_id",
+          "is_completed",
+          "created_at",
+          "updated_at",
+          "access_token",
+          "token_expires_at",
+          "is_signed_by_candidate",
+          "signature_url",
+          ...CANDIDATE_EXTENDED_COLUMNS.map((c) => c.label),
+        ];
+
         await sheets.spreadsheets.values.update({
           spreadsheetId,
-          range: `${SHEET_NAMES.CANDIDATES}!Q1`,
+          range: `${SHEET_NAMES.CANDIDATES}!A1:AY1`,
           valueInputOption: "USER_ENTERED",
-          requestBody: { values: [["candidate_details"]] },
+          requestBody: { values: [fullHeaders] },
         });
       }
 
@@ -136,6 +157,27 @@ export class SheetsRepository {
         candidate.token_expires_at ||
         new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
+      let details: Record<string, any> = {};
+      if (candidate.candidate_details) {
+        if (typeof candidate.candidate_details === "string") {
+          try {
+            details = JSON.parse(candidate.candidate_details);
+          } catch {
+            details = {};
+          }
+        } else if (typeof candidate.candidate_details === "object") {
+          details = { ...candidate.candidate_details };
+        }
+      }
+
+      const extendedValues = CANDIDATE_EXTENDED_COLUMNS.map((col) => {
+        if (col.key === "candidate_details") {
+          return JSON.stringify(details);
+        }
+        const val = details[col.key];
+        return val !== undefined && val !== null ? String(val) : "";
+      });
+
       const row = [
         sanitizeSheetCellValue(candidate.candidate_id),
         sanitizeSheetCellValue(candidate.full_name),
@@ -153,16 +195,12 @@ export class SheetsRepository {
         tokenExpiresAt,
         candidate.is_signed_by_candidate ? "TRUE" : "FALSE",
         candidate.signature_url || "",
-        candidate.candidate_details
-          ? (typeof candidate.candidate_details === "string"
-              ? candidate.candidate_details
-              : JSON.stringify(candidate.candidate_details))
-          : "",
+        ...extendedValues,
       ];
 
       await sheets.spreadsheets.values.append({
         spreadsheetId,
-        range: `${SHEET_NAMES.CANDIDATES}!A:Q`,
+        range: `${SHEET_NAMES.CANDIDATES}!A:AY`,
         valueInputOption: "USER_ENTERED",
         insertDataOption: "INSERT_ROWS",
         requestBody: {
@@ -201,19 +239,45 @@ export class SheetsRepository {
 
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${SHEET_NAMES.CANDIDATES}!A2:Q`,
+        range: `${SHEET_NAMES.CANDIDATES}!A2:AY`,
       });
 
       const rows = response.data.values || [];
 
       sheetCandidates = rows
         .map((row) => {
-          let candidateDetails: Record<string, any> | null = null;
-          if (row[16]) {
+          let candidateDetails: Record<string, any> = {};
+
+          // Read extended individual columns Q (16) through AX (49)
+          CANDIDATE_EXTENDED_COLUMNS.forEach((col, idx) => {
+            if (col.key === "candidate_details") return;
+            const val = row[16 + idx];
+            if (val !== undefined && val !== null && String(val).trim() !== "") {
+              candidateDetails[col.key] = String(val);
+            }
+          });
+
+          // Check Column AY (50) for JSON backup
+          if (row[50]) {
             try {
-              candidateDetails = typeof row[16] === "string" ? JSON.parse(row[16]) : row[16];
+              const parsed = typeof row[50] === "string" ? JSON.parse(row[50]) : row[50];
+              if (parsed && typeof parsed === "object") {
+                candidateDetails = { ...parsed, ...candidateDetails };
+              }
             } catch {
-              candidateDetails = null;
+              // Ignore
+            }
+          }
+
+          // Fallback: If Column Q contains JSON (from earlier single-column commit)
+          if (row[16] && String(row[16]).trim().startsWith("{")) {
+            try {
+              const parsedQ = JSON.parse(String(row[16]));
+              if (parsedQ && typeof parsedQ === "object") {
+                candidateDetails = { ...parsedQ, ...candidateDetails };
+              }
+            } catch {
+              // Ignore
             }
           }
           return {
@@ -516,7 +580,7 @@ export class SheetsRepository {
 
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${SHEET_NAMES.CANDIDATES}!A2:Q`,
+        range: `${SHEET_NAMES.CANDIDATES}!A2:AY`,
       });
 
       const rows = response.data.values || [];
@@ -525,12 +589,20 @@ export class SheetsRepository {
       if (rowIndex >= 0) {
         const sheetRowNumber = rowIndex + 2;
 
-        // Update Column Q (candidate_details JSON)
+        // Write extended individual columns Q through AY (16 to 50)
+        const extendedValues = CANDIDATE_EXTENDED_COLUMNS.map((col) => {
+          if (col.key === "candidate_details") {
+            return JSON.stringify(mergedDetails);
+          }
+          const val = mergedDetails[col.key];
+          return val !== undefined && val !== null ? String(val) : "";
+        });
+
         await sheets.spreadsheets.values.update({
           spreadsheetId,
-          range: `${SHEET_NAMES.CANDIDATES}!Q${sheetRowNumber}`,
+          range: `${SHEET_NAMES.CANDIDATES}!Q${sheetRowNumber}:AY${sheetRowNumber}`,
           valueInputOption: "USER_ENTERED",
-          requestBody: { values: [[JSON.stringify(mergedDetails)]] },
+          requestBody: { values: [extendedValues] },
         });
 
         // Update Column L (updated_at)
@@ -567,6 +639,9 @@ export class SheetsRepository {
           });
         }
       }
+
+      // Synchronize shared fields across all other filled forms for this candidate
+      await this.syncCandidateFormsAcrossDocs(candidate_id, mergedDetails).catch(() => {});
     } catch (err) {
       console.warn("Sheets updateCandidateProfileData offline fallback:", err);
     }
@@ -580,6 +655,121 @@ export class SheetsRepository {
       candidate_details: mergedDetails,
       updated_at: now,
     };
+  }
+
+  /**
+   * Synchronizes shared candidate details across all existing form records for the candidate.
+   * If candidate updated address, father_name, name_en, or phone in one form,
+   * this updates the stored form_data for doc_1, doc_4, doc_9, etc.
+   */
+  async syncCandidateFormsAcrossDocs(
+    candidate_id: string,
+    mergedDetails: Record<string, any>
+  ): Promise<void> {
+    if (!candidate_id || !mergedDetails) return;
+
+    // 1. Update in local testStore
+    const testStore = loadTestStore();
+    const candidateItems = testStore.checklistItems.filter(
+      (item) => item.candidate_id === candidate_id && item.form_data
+    );
+
+    for (const item of candidateItems) {
+      try {
+        const itemData = JSON.parse(item.form_data || "{}");
+        const updatedItemData: Record<string, any> = { ...itemData };
+
+        if (item.doc_type_id === "doc_1") {
+          if (mergedDetails.first_name) updatedItemData.q1FirstName = mergedDetails.first_name;
+          if (mergedDetails.last_name) updatedItemData.q1LastName = mergedDetails.last_name;
+          if (mergedDetails.father_name) updatedItemData.q1FatherName = mergedDetails.father_name;
+          if (mergedDetails.name_en) updatedItemData.q1NameEn = mergedDetails.name_en;
+          if (mergedDetails.address) updatedItemData.q1Address = mergedDetails.address;
+          if (mergedDetails.city) updatedItemData.q1City = mergedDetails.city;
+          if (mergedDetails.street) updatedItemData.q1Street = mergedDetails.street;
+          if (mergedDetails.house_number) updatedItemData.q1HouseNumber = mergedDetails.house_number;
+          if (mergedDetails.zip_code) updatedItemData.q1ZipCode = mergedDetails.zip_code;
+          if (mergedDetails.phone) updatedItemData.q1MobilePhone = mergedDetails.phone;
+          if (mergedDetails.signatureDataUrl) updatedItemData.signatureDataUrl = mergedDetails.signatureDataUrl;
+        } else if (item.doc_type_id === "doc_4") {
+          if (mergedDetails.father_name) updatedItemData.q4FatherName = mergedDetails.father_name;
+          if (mergedDetails.address) updatedItemData.q4Address = mergedDetails.address;
+          if (mergedDetails.signatureDataUrl) updatedItemData.signatureDataUrl = mergedDetails.signatureDataUrl;
+        } else if (item.doc_type_id === "doc_9") {
+          if (mergedDetails.name_en) updatedItemData.q9NameEn = mergedDetails.name_en;
+          if (mergedDetails.role_in_project) updatedItemData.q9RoleInProject = mergedDetails.role_in_project;
+          if (mergedDetails.manager_name) updatedItemData.q9ManagerName = mergedDetails.manager_name;
+          if (mergedDetails.start_date) updatedItemData.q9StartDate = mergedDetails.start_date;
+          if (mergedDetails.signatureDataUrl) updatedItemData.signatureDataUrl = mergedDetails.signatureDataUrl;
+        } else {
+          if (mergedDetails.signatureDataUrl) updatedItemData.signatureDataUrl = mergedDetails.signatureDataUrl;
+        }
+
+        item.form_data = JSON.stringify(updatedItemData);
+        item.updated_at = new Date().toISOString();
+      } catch {}
+    }
+    saveTestStore(testStore);
+
+    // 2. Update in Google Sheets ChecklistItems
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
+      if (!spreadsheetId) return;
+
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CHECKLIST_ITEMS}!A2:I`,
+      });
+      const rows = response.data.values || [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (String(row[1] || "") === candidate_id && row[8]) {
+          try {
+            const docTypeId = String(row[2] || "");
+            const parsed = JSON.parse(String(row[8]));
+            const updated = { ...parsed };
+
+            if (docTypeId === "doc_1") {
+              if (mergedDetails.first_name) updated.q1FirstName = mergedDetails.first_name;
+              if (mergedDetails.last_name) updated.q1LastName = mergedDetails.last_name;
+              if (mergedDetails.father_name) updated.q1FatherName = mergedDetails.father_name;
+              if (mergedDetails.name_en) updated.q1NameEn = mergedDetails.name_en;
+              if (mergedDetails.address) updated.q1Address = mergedDetails.address;
+              if (mergedDetails.city) updated.q1City = mergedDetails.city;
+              if (mergedDetails.street) updated.q1Street = mergedDetails.street;
+              if (mergedDetails.house_number) updated.q1HouseNumber = mergedDetails.house_number;
+              if (mergedDetails.zip_code) updated.q1ZipCode = mergedDetails.zip_code;
+              if (mergedDetails.phone) updated.q1MobilePhone = mergedDetails.phone;
+              if (mergedDetails.signatureDataUrl) updated.signatureDataUrl = mergedDetails.signatureDataUrl;
+            } else if (docTypeId === "doc_4") {
+              if (mergedDetails.father_name) updated.q4FatherName = mergedDetails.father_name;
+              if (mergedDetails.address) updated.q4Address = mergedDetails.address;
+              if (mergedDetails.signatureDataUrl) updated.signatureDataUrl = mergedDetails.signatureDataUrl;
+            } else if (docTypeId === "doc_9") {
+              if (mergedDetails.name_en) updated.q9NameEn = mergedDetails.name_en;
+              if (mergedDetails.role_in_project) updated.q9RoleInProject = mergedDetails.role_in_project;
+              if (mergedDetails.manager_name) updated.q9ManagerName = mergedDetails.manager_name;
+              if (mergedDetails.start_date) updated.q9StartDate = mergedDetails.start_date;
+              if (mergedDetails.signatureDataUrl) updated.signatureDataUrl = mergedDetails.signatureDataUrl;
+            } else {
+              if (mergedDetails.signatureDataUrl) updated.signatureDataUrl = mergedDetails.signatureDataUrl;
+            }
+
+            const sheetRowNumber = i + 2;
+            await sheets.spreadsheets.values.update({
+              spreadsheetId,
+              range: `${SHEET_NAMES.CHECKLIST_ITEMS}!I${sheetRowNumber}`,
+              valueInputOption: "USER_ENTERED",
+              requestBody: { values: [[JSON.stringify(updated)]] },
+            });
+          } catch {}
+        }
+      }
+    } catch (err) {
+      console.warn("syncCandidateFormsAcrossDocs offline fallback:", err);
+    }
   }
 
   /**
