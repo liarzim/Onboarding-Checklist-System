@@ -18,6 +18,8 @@ import {
   PenTool,
   Camera,
   Image as ImageIcon,
+  Mail,
+  Send,
 } from "lucide-react";
 import CandidatePortalLink from "@/components/common/CandidatePortalLink";
 import CandidateFilledDetailsCard from "@/components/candidate/CandidateFilledDetailsCard";
@@ -67,6 +69,50 @@ export default function CandidateChecklistPage() {
     text: string;
     docId: string;
   } | null>(null);
+
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailResult, setEmailResult] = useState<{
+    success: boolean;
+    message: string;
+    recipientEmail?: string;
+    mailtoUrl?: string;
+  } | null>(null);
+
+  async function handleSendCompletedEmail() {
+    try {
+      setIsSendingEmail(true);
+      setEmailResult(null);
+      const res = await fetch(`/api/candidates/${candidateId}/send-completed-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          completedByUserEmail: candidate?.email || ""
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setEmailResult({
+          success: true,
+          message: data.message || "הטפסים נשלחו בהצלחה במייל לאחראי התהליך!",
+          recipientEmail: data.recipientEmail,
+          mailtoUrl: data.mailtoUrl
+        });
+      } else {
+        setEmailResult({
+          success: false,
+          message: data.error || data.message || "שגיאה בשליחת המייל",
+          mailtoUrl: data.mailtoUrl
+        });
+      }
+    } catch (err: any) {
+      setEmailResult({
+        success: false,
+        message: err.message || "שגיאת רשת בעת שליחת המייל"
+      });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  }
 
   async function loadCandidateData() {
     if (!candidateId) return;
@@ -331,6 +377,74 @@ export default function CandidateChecklistPage() {
         candidateDetails={candidate.candidate_details}
         candidateName={candidate.full_name}
       />
+
+      {/* Forms Completion Email Dispatch Card */}
+      {uploadedCount === totalCount && (
+        <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-6 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-slate-900">
+                  כל הטפסים ומסמכי החובה הושלמו!
+                </h3>
+              </div>
+              <p className="text-sm text-slate-600">
+                ניתן לשלוח כעת את כל הטפסים החתומים (כקבצי PDF מצורפים) לאחראי על התהליך לפי הגדרות המערכת.
+              </p>
+              {emailResult && (
+                <div
+                  className={`mt-2 p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
+                    emailResult.success
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-rose-100 text-rose-800"
+                  }`}
+                >
+                  {emailResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                  )}
+                  <span>{emailResult.message}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                type="button"
+                onClick={handleSendCompletedEmail}
+                disabled={isSendingEmail}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium rounded-xl text-xs transition flex items-center gap-2 shadow-sm"
+              >
+                {isSendingEmail ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>שולח טפסים במייל...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    <span>{emailResult?.success ? "שלח שוב במייל לאחראי" : "שלח טפסים במייל לאחראי"}</span>
+                  </>
+                )}
+              </button>
+
+              {emailResult?.mailtoUrl && (
+                <a
+                  href={emailResult.mailtoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium rounded-xl text-xs transition flex items-center gap-2 shadow-sm"
+                >
+                  <Mail className="w-4 h-4 text-blue-600" />
+                  <span>פתח בדואר ברירת המחדל שלי</span>
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Global Upload Notification Toast */}
       {uploadMessage && (

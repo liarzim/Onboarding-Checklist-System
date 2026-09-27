@@ -18,6 +18,8 @@ import {
   Clock,
   ExternalLink,
   Sparkles,
+  Mail,
+  Paperclip,
 } from "lucide-react";
 import DigitalFormView from "@/components/forms/DigitalFormView";
 import IdCardUploadCard from "@/components/forms/IdCardUploadCard";
@@ -81,6 +83,11 @@ export default function CandidatePortalClient({
   // Current active form selection
   const [selectedDocId, setSelectedDocId] = useState<string>("doc_1");
   const [isFinalSubmitted, setIsFinalSubmitted] = useState(false);
+  const [emailDispatchResult, setEmailDispatchResult] = useState<{
+    recipient: string;
+    attachmentsCount: number;
+    mailtoLink?: string;
+  } | null>(null);
 
   // Compute progress
   const completedCount = completedDocIds.size;
@@ -184,6 +191,22 @@ export default function CandidatePortalClient({
             is_acknowledged: true,
           }),
         });
+
+        // Dispatch status completion email with all signed PDF attachments
+        const emailRes = await fetch(
+          `/api/candidates/${candidate.candidate_id}/send-completed-email`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token, stage_id: "stage_1" }),
+          }
+        );
+        if (emailRes.ok) {
+          const emailJson = await emailRes.json();
+          if (emailJson.data) {
+            setEmailDispatchResult(emailJson.data);
+          }
+        }
       } catch (err) {
         console.error("Error finalizing candidate submission:", err);
       }
@@ -243,11 +266,47 @@ export default function CandidatePortalClient({
           </div>
         </div>
 
+        {/* Email Dispatch & Attachments Notification Card */}
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-right space-y-2">
+          <div className="flex items-center gap-2 text-xs font-bold text-blue-900">
+            <Mail className="w-4 h-4 text-blue-600 flex-shrink-0" />
+            <span>הודעת מייל עם כל הטפסים החתומים (Attachments) נשלחה לאחראי:</span>
+          </div>
+          <p className="text-xs text-blue-800 leading-relaxed">
+            כל 11 טפסי הקליטה החתומים נשלחו ישירות כקבצים מצורפים אל{" "}
+            <strong>{emailDispatchResult?.recipient || "רכז/ת הקליטה (HR)"}</strong>.
+          </p>
+          {emailDispatchResult?.mailtoLink && (
+            <div className="pt-1">
+              <a
+                href={emailDispatchResult.mailtoLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-blue-300 text-blue-700 hover:bg-blue-100 text-xs font-bold transition shadow-xs"
+              >
+                <Mail className="w-3.5 h-3.5 text-blue-600" />
+                <span>פתח בדואר ברירת המחדל שלי (Outlook / Gmail)</span>
+              </a>
+            </div>
+          )}
+        </div>
+
         <p className="text-xs text-slate-500">
           פנייתך הועברה להמשך טיפול במחלקת ביטחון שדה ומשאבי אנוש. הודעה תישלח עם התקדמות התהליך.
         </p>
 
-        <div className="pt-2">
+        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+          {emailDispatchResult?.mailtoLink && (
+            <a
+              href={emailDispatchResult.mailtoLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition"
+            >
+              <Mail className="w-4 h-4" />
+              <span>שלח במייל ברירת המחדל שלי</span>
+            </a>
+          )}
           <Link
             href="/login"
             className="inline-flex items-center justify-center px-8 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-md transition"

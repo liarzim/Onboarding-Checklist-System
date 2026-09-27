@@ -40,11 +40,13 @@ import {
   Camera,
   Image as ImageIcon,
   ListFilter,
+  Mail,
 } from "lucide-react";
 import FormEditorModal from "@/components/forms/FormEditorModal";
 import FormPreviewModal from "@/components/forms/FormPreviewModal";
 import FormFieldsSettingsTab from "@/components/admin/FormFieldsSettingsTab";
 import DropdownsSettingsTab from "@/components/admin/DropdownsSettingsTab";
+import StatusEmailSettingsTab from "@/components/admin/StatusEmailSettingsTab";
 import { DEFAULT_UPLOAD_POLICY, type UploadPolicyConfig } from "@/lib/uploadPolicyTypes";
 import type { SettingStage, DocumentType, Vendor, AdminUser, FormFieldSetting } from "@/types/schema";
 import { DEFAULT_FORM_FIELD_SETTINGS, DEFAULT_DROPDOWN_OPTIONS } from "@/types/schema";
@@ -75,7 +77,7 @@ const FALLBACK_PROJECTS = ["פרויקט אלפא", "פרויקט סייבר", "
 
 export default function AdminSettingsPage() {
   const [activeTab, setActiveTab] = useState<
-    "stages" | "documents" | "form_fields" | "dropdowns" | "vendors" | "projects" | "admins" | "google"
+    "stages" | "documents" | "form_fields" | "dropdowns" | "email_templates" | "vendors" | "projects" | "admins" | "google"
   >("stages");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -83,7 +85,7 @@ export default function AdminSettingsPage() {
 
   // Helper to change tab and persist to URL and localStorage
   function handleTabChange(
-    tab: "stages" | "documents" | "form_fields" | "dropdowns" | "vendors" | "projects" | "admins" | "google"
+    tab: "stages" | "documents" | "form_fields" | "dropdowns" | "email_templates" | "vendors" | "projects" | "admins" | "google"
   ) {
     setActiveTab(tab);
     if (typeof window !== "undefined") {
@@ -212,14 +214,14 @@ export default function AdminSettingsPage() {
         window.history.replaceState({}, "", "/admin/settings?tab=google");
       } else if (
         tabParam &&
-        ["stages", "documents", "vendors", "projects", "admins", "google"].includes(tabParam)
+        ["stages", "documents", "form_fields", "dropdowns", "email_templates", "vendors", "projects", "admins", "google"].includes(tabParam)
       ) {
         setActiveTab(tabParam as any);
       } else {
         const savedTab = localStorage.getItem("admin_settings_active_tab");
         if (
           savedTab &&
-          ["stages", "documents", "vendors", "projects", "admins", "google"].includes(savedTab)
+          ["stages", "documents", "form_fields", "dropdowns", "email_templates", "vendors", "projects", "admins", "google"].includes(savedTab)
         ) {
           setActiveTab(savedTab as any);
         }
@@ -1202,6 +1204,18 @@ export default function AdminSettingsPage() {
         </button>
 
         <button
+          onClick={() => handleTabChange("email_templates")}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+            activeTab === "email_templates"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+          }`}
+        >
+          <Mail className="w-4 h-4 text-rose-500" />
+          <span>הודעות מייל לסטאטוסים</span>
+        </button>
+
+        <button
           onClick={() => handleTabChange("vendors")}
           className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
             activeTab === "vendors"
@@ -1569,6 +1583,11 @@ export default function AdminSettingsPage() {
                   }
                 }}
               />
+            )}
+
+            {/* TAB: EMAIL TEMPLATES PER STATUS */}
+            {activeTab === "email_templates" && (
+              <StatusEmailSettingsTab admins={admins} stages={stages} />
             )}
 
             {/* TAB 3: VENDORS */}

@@ -17,6 +17,10 @@ import {
   DEFAULT_FORM_FIELD_SETTINGS,
   DEFAULT_DROPDOWN_OPTIONS,
 } from "@/types/schema";
+import {
+  DEFAULT_STATUS_EMAIL_TEMPLATES,
+  type StatusEmailTemplate,
+} from "@/types/emailTemplates";
 import { sanitizeSheetCellValue } from "../security";
 
 export const SHEET_NAMES = {
@@ -2044,6 +2048,50 @@ export class SheetsRepository {
    */
   async saveDropdownOptions(options: Record<string, { label: string; options: string[] }>): Promise<void> {
     await this.setSystemSetting("dropdown_options", JSON.stringify(options));
+  }
+
+  /**
+   * Retrieves per-status email templates from SystemSettings, merging with defaults.
+   */
+  async getStatusEmailTemplates(): Promise<Record<string, StatusEmailTemplate>> {
+    try {
+      const settings = await this.getSystemSettings();
+      if (settings["status_email_templates_json"]) {
+        const parsed = JSON.parse(settings["status_email_templates_json"]);
+        if (parsed && typeof parsed === "object") {
+          return { ...DEFAULT_STATUS_EMAIL_TEMPLATES, ...parsed };
+        }
+      }
+    } catch (err) {
+      console.warn("Could not read status_email_templates_json from SystemSettings:", err);
+    }
+    return { ...DEFAULT_STATUS_EMAIL_TEMPLATES };
+  }
+
+  /**
+   * Saves per-status email templates to SystemSettings sheet.
+   */
+  async saveStatusEmailTemplates(templates: Record<string, StatusEmailTemplate>): Promise<void> {
+    await this.setSystemSetting("status_email_templates_json", JSON.stringify(templates));
+  }
+
+  /**
+   * Retrieves the email template for a specific stage/status.
+   */
+  async getStatusEmailTemplate(stageId: string): Promise<StatusEmailTemplate> {
+    const all = await this.getStatusEmailTemplates();
+    return (
+      all[stageId] ||
+      DEFAULT_STATUS_EMAIL_TEMPLATES[stageId] || {
+        stage_id: stageId,
+        stage_name: stageId,
+        enabled: true,
+        recipient_email: "hr@demo.co.il",
+        attach_pdfs: stageId === "stage_1",
+        subject: "עדכון סטאטוס קליטה - {שם_מועמד} - {שם_פרויקט}",
+        body: "שלום רב,\n\nהרינו לעדכן על שינוי סטאטוס בתיק הקליטה של {שם_מועמד}.\n\nבברכה,\nמערכת Onboarding Checklist",
+      }
+    );
   }
 }
 
