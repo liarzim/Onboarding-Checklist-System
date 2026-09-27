@@ -2,7 +2,7 @@ import { sheetsRepository } from "@/lib/repositories/sheetsRepository";
 import { getDriveClient, getGoogleAuth } from "@/lib/google";
 import { getEnv } from "@/lib/env";
 import { interpolateEmailTemplate } from "./emailTemplateEngine";
-import type { AuditLogEntry } from "@/types/schema";
+import type { AuditLogEntry, ChecklistItem } from "@/types/schema";
 
 export interface SendFormsEmailOptions {
   candidateId: string;
@@ -56,9 +56,9 @@ export async function sendStatusNotificationEmail({
   }
 
   // 3. Collect candidate documents
-  const items = await sheetsRepository.getChecklistItems(candidateId);
+  const items = await sheetsRepository.getChecklist(candidateId);
   const uploadedItems = items.filter(
-    (i) => i.status === "Uploaded" || i.status === "Approved" || i.file_drive_id
+    (i: ChecklistItem) => i.status === "Uploaded" || i.status === "Approved" || i.file_drive_id
   );
 
   // 4. Interpolate variables into subject and body
@@ -80,7 +80,7 @@ export async function sendStatusNotificationEmail({
       if (item.file_name) {
         attachmentNames.push(item.file_name);
       } else {
-        attachmentNames.push(`${item.doc_name} - ${candidate.full_name}.pdf`);
+        attachmentNames.push(`${item.doc_type_id} - ${candidate.full_name}.pdf`);
       }
     }
   }
