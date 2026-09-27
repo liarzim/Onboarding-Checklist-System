@@ -52,7 +52,32 @@ export async function GET(request: Request) {
 
     let parsedData: Record<string, any> = {};
 
-    // 1. Merge answers from ANY other filled documents of this candidate as base
+    // 0. Base on candidate_details from Candidate record
+    const candidate = await sheetsRepository.getCandidateById(candidateId);
+    if (candidate) {
+      if (candidate.candidate_details) {
+        let detailsObj: Record<string, any> = {};
+        if (typeof candidate.candidate_details === "string") {
+          try {
+            detailsObj = JSON.parse(candidate.candidate_details);
+          } catch {
+            detailsObj = {};
+          }
+        } else if (typeof candidate.candidate_details === "object") {
+          detailsObj = candidate.candidate_details;
+        }
+        for (const [k, v] of Object.entries(detailsObj)) {
+          if (v !== undefined && v !== null && v !== "") {
+            parsedData[k] = v;
+          }
+        }
+      }
+      if (candidate.signature_url && !parsedData.signatureDataUrl) {
+        parsedData.signatureDataUrl = candidate.signature_url;
+      }
+    }
+
+    // 1. Merge answers from ANY other filled documents of this candidate
     for (const item of checklist) {
       if (item.form_data) {
         try {
@@ -82,14 +107,6 @@ export async function GET(request: Request) {
       }
     }
 
-    // 3. Fallback to candidate profile data
-    const candidate = await sheetsRepository.getCandidateById(candidateId);
-    if (candidate) {
-      if (candidate.signature_url && !parsedData.signatureDataUrl) {
-        parsedData.signatureDataUrl = candidate.signature_url;
-      }
-    }
-
     const hasAnyData = Object.keys(parsedData).length > 0;
 
     return NextResponse.json({
@@ -108,6 +125,59 @@ export async function GET(request: Request) {
             ? error.message
             : "שגיאה בטעינת נתוני הטופס הקודמים",
       },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    await ensureAuthReady();
+    const body = await request.json();
+    const { candidate_id, doc_type_id, form_data, token } = body;
+
+    if (!candidate_id) {
+      return NextResponse.json(
+        { error: "Validation Error", message: "חסר מזהה מועמד" },
+        { status: 400 }
+      );
+    }
+
+    // Auth verification
+    if (token) {
+      const candidateByToken = await sheetsRepository.getCandidateByToken(token);
+      if (!candidateByToken || candidateByToken.candidate_id !== candidate_id) {
+        return NextResponse.json({ error: "Forbidden", message: "טוקן אינו תקין" }, { status: 403 });
+      }
+    } else {
+      const adminSession = await getAdminSession();
+      if (!adminSession) {
+        const vendorSession = await getVendorSession();
+        if (!vendorSession) {
+          return NextResponse.json({ error: "Unauthorized", message: "נדרשת הזדהות" }, { status: 401 });
+        }
+        await assertVendorOwnership(vendorSession.vendor_id, candidate_id);
+      }
+    }
+
+    if (form_data && typeof form_data === "object") {
+      // 1. Sync directly to candidate profile
+      await sheetsRepository.updateCandidateProfileData(candidate_id, form_data);
+
+      // 2. If doc_type_id provided, also save to checklist item
+      if (doc_type_id) {
+        await sheetsRepository.updateChecklistItem(candidate_id, doc_type_id, {
+          status: "Draft",
+          form_data: JSON.stringify(form_data),
+        });
+      }
+    }
+
+    return NextResponse.json({ success: true, message: "הפרטים נשמרו בהצלחה בפרטי המועמד" });
+  } catch (error) {
+    console.error("Error in POST /api/documents/form-data:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error", message: "שגיאה בשמירת פרטי המועמד" },
       { status: 500 }
     );
   }

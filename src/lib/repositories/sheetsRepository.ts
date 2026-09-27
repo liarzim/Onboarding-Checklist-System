@@ -103,11 +103,16 @@ export class SheetsRepository {
         tokenExpiresAt,
         candidate.is_signed_by_candidate ? "TRUE" : "FALSE",
         candidate.signature_url || "",
+        candidate.candidate_details
+          ? (typeof candidate.candidate_details === "string"
+              ? candidate.candidate_details
+              : JSON.stringify(candidate.candidate_details))
+          : "",
       ];
 
       await sheets.spreadsheets.values.append({
         spreadsheetId,
-        range: `${SHEET_NAMES.CANDIDATES}!A:P`,
+        range: `${SHEET_NAMES.CANDIDATES}!A:Q`,
         valueInputOption: "USER_ENTERED",
         insertDataOption: "INSERT_ROWS",
         requestBody: {
@@ -144,30 +149,41 @@ export class SheetsRepository {
 
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${SHEET_NAMES.CANDIDATES}!A2:P`,
+        range: `${SHEET_NAMES.CANDIDATES}!A2:Q`,
       });
 
       const rows = response.data.values || [];
 
       sheetCandidates = rows
-        .map((row) => ({
-          candidate_id: String(row[0] || ""),
-          full_name: String(row[1] || ""),
-          id_number: String(row[2] || ""),
-          email: String(row[3] || ""),
-          phone: String(row[4] || ""),
-          vendor_id: String(row[5] || ""),
-          project_id: String(row[6] || ""),
-          drive_folder_id: String(row[7] || ""),
-          current_stage_id: String(row[8] || "stage_1"),
-          is_completed: String(row[9] ?? "").toUpperCase() === "TRUE",
-          created_at: String(row[10] || new Date().toISOString()),
-          updated_at: String(row[11] || new Date().toISOString()),
-          access_token: row[12] ? String(row[12]) : null,
-          token_expires_at: row[13] ? String(row[13]) : null,
-          is_signed_by_candidate: String(row[14] ?? "").toUpperCase() === "TRUE",
-          signature_url: row[15] ? String(row[15]) : null,
-        }))
+        .map((row) => {
+          let candidateDetails: Record<string, any> | null = null;
+          if (row[16]) {
+            try {
+              candidateDetails = typeof row[16] === "string" ? JSON.parse(row[16]) : row[16];
+            } catch {
+              candidateDetails = null;
+            }
+          }
+          return {
+            candidate_id: String(row[0] || ""),
+            full_name: String(row[1] || ""),
+            id_number: String(row[2] || ""),
+            email: String(row[3] || ""),
+            phone: String(row[4] || ""),
+            vendor_id: String(row[5] || ""),
+            project_id: String(row[6] || ""),
+            drive_folder_id: String(row[7] || ""),
+            current_stage_id: String(row[8] || "stage_1"),
+            is_completed: String(row[9] ?? "").toUpperCase() === "TRUE",
+            created_at: String(row[10] || new Date().toISOString()),
+            updated_at: String(row[11] || new Date().toISOString()),
+            access_token: row[12] ? String(row[12]) : null,
+            token_expires_at: row[13] ? String(row[13]) : null,
+            is_signed_by_candidate: String(row[14] ?? "").toUpperCase() === "TRUE",
+            signature_url: row[15] ? String(row[15]) : null,
+            candidate_details: candidateDetails,
+          };
+        })
         .filter((c) => c.candidate_id && c.candidate_id.trim().length > 0);
 
       isSheetsConnected = true;
@@ -362,6 +378,154 @@ export class SheetsRepository {
     } catch (err) {
       console.warn("Sheets markCandidateSigned offline fallback:", err);
     }
+  }
+
+  /**
+   * Updates candidate details accumulated from digital forms.
+   * Persists to testStore and Google Sheets Candidates tab (Column Q).
+   * Synchronizes top-level name, phone, id_number, and signature if provided.
+   */
+  async updateCandidateProfileData(
+    candidate_id: string,
+    formAnswers: Record<string, any>
+  ): Promise<Candidate | null> {
+    if (!candidate_id || !formAnswers || typeof formAnswers !== "object") return null;
+
+    const now = new Date().toISOString();
+    const existingCandidate = await this.getCandidateById(candidate_id);
+    if (!existingCandidate) return null;
+
+    // Parse existing candidate details
+    let existingDetails: Record<string, any> = {};
+    if (existingCandidate.candidate_details) {
+      if (typeof existingCandidate.candidate_details === "string") {
+        try {
+          existingDetails = JSON.parse(existingCandidate.candidate_details);
+        } catch {
+          existingDetails = {};
+        }
+      } else if (typeof existingCandidate.candidate_details === "object") {
+        existingDetails = { ...existingCandidate.candidate_details };
+      }
+    }
+
+    // Clean non-empty answers
+    const cleanAnswers: Record<string, any> = {};
+    for (const [k, v] of Object.entries(formAnswers)) {
+      if (v !== undefined && v !== null && v !== "") {
+        cleanAnswers[k] = v;
+      }
+    }
+
+    // Normalize standard fields
+    const firstName = cleanAnswers.q1FirstName || cleanAnswers.first_name || existingDetails.first_name;
+    const lastName = cleanAnswers.q1LastName || cleanAnswers.last_name || existingDetails.last_name;
+    const fullName = (firstName && lastName) ? `${firstName} ${lastName}`.trim() : (cleanAnswers.full_name || existingCandidate.full_name);
+    const phone = cleanAnswers.q1MobilePhone || cleanAnswers.phone || existingCandidate.phone;
+    const idNumber = cleanAnswers.id_number || existingCandidate.id_number;
+    const signatureUrl = cleanAnswers.signatureDataUrl || cleanAnswers.signature_url || existingCandidate.signature_url;
+
+    const mergedDetails: Record<string, any> = {
+      ...existingDetails,
+      ...cleanAnswers,
+      first_name: firstName,
+      last_name: lastName,
+      full_name: fullName,
+      phone: phone,
+      id_number: idNumber,
+      father_name: cleanAnswers.q1FatherName || cleanAnswers.q4FatherName || cleanAnswers.father_name || existingDetails.father_name,
+      address: cleanAnswers.q1Address || cleanAnswers.q4Address || cleanAnswers.address || existingDetails.address,
+      name_en: cleanAnswers.q1NameEn || cleanAnswers.q9NameEn || cleanAnswers.name_en || existingDetails.name_en,
+      updated_at: now,
+    };
+
+    // 1. Update in local testStore
+    const testStore = loadTestStore();
+    const cIdx = testStore.candidates.findIndex((c) => c.candidate_id === candidate_id);
+    if (cIdx >= 0) {
+      testStore.candidates[cIdx] = {
+        ...testStore.candidates[cIdx],
+        full_name: fullName,
+        phone: phone,
+        id_number: idNumber,
+        signature_url: signatureUrl || testStore.candidates[cIdx].signature_url,
+        candidate_details: mergedDetails,
+        updated_at: now,
+      };
+      saveTestStore(testStore);
+    }
+
+    // 2. Update in Google Sheets
+    try {
+      const sheets = getSheetsClient();
+      const spreadsheetId = this.getSpreadsheetId();
+
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${SHEET_NAMES.CANDIDATES}!A2:Q`,
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex((row) => String(row[0] || "") === candidate_id);
+
+      if (rowIndex >= 0) {
+        const sheetRowNumber = rowIndex + 2;
+
+        // Update Column Q (candidate_details JSON)
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.CANDIDATES}!Q${sheetRowNumber}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: [[JSON.stringify(mergedDetails)]] },
+        });
+
+        // Update Column L (updated_at)
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAMES.CANDIDATES}!L${sheetRowNumber}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: [[now]] },
+        });
+
+        // Sync top-level full_name, phone, signature if changed
+        if (fullName && fullName !== existingCandidate.full_name) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `${SHEET_NAMES.CANDIDATES}!B${sheetRowNumber}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: [[sanitizeSheetCellValue(fullName)]] },
+          });
+        }
+        if (phone && phone !== existingCandidate.phone) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `${SHEET_NAMES.CANDIDATES}!E${sheetRowNumber}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: [[sanitizeSheetCellValue(phone)]] },
+          });
+        }
+        if (signatureUrl && signatureUrl !== existingCandidate.signature_url) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `${SHEET_NAMES.CANDIDATES}!P${sheetRowNumber}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: [[signatureUrl]] },
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("Sheets updateCandidateProfileData offline fallback:", err);
+    }
+
+    return {
+      ...existingCandidate,
+      full_name: fullName,
+      phone: phone,
+      id_number: idNumber,
+      signature_url: signatureUrl || existingCandidate.signature_url,
+      candidate_details: mergedDetails,
+      updated_at: now,
+    };
   }
 
   /**

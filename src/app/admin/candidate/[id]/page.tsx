@@ -21,6 +21,7 @@ import {
   Trash2,
 } from "lucide-react";
 import CandidatePortalLink from "@/components/common/CandidatePortalLink";
+import CandidateFilledDetailsCard from "@/components/candidate/CandidateFilledDetailsCard";
 
 interface CandidateInfo {
   candidate_id: string;
@@ -34,6 +35,7 @@ interface CandidateInfo {
   drive_folder_id: string;
   current_stage_id: string;
   is_completed: boolean;
+  candidate_details?: any;
   created_at: string;
   updated_at: string;
 }
@@ -362,6 +364,12 @@ export default function AdminCandidateReviewPage() {
         candidateName={candidate.full_name}
         candidatePhone={candidate.phone}
         variant="card"
+      />
+
+      {/* Candidate Profile Details Filled in Forms */}
+      <CandidateFilledDetailsCard
+        candidateDetails={candidate.candidate_details}
+        candidateName={candidate.full_name}
       />
 
       {/* Stage Update Toast Message */}

@@ -254,62 +254,84 @@ export default function DigitalFormView({
   useEffect(() => {
     let isCancelled = false;
 
-    function applySavedData(data: any) {
-      if (!data || typeof data !== "object") return;
+    function applySavedData(rawData: any) {
+      if (!rawData || typeof rawData !== "object") return;
       let hasAny = false;
 
-      // Personal details (doc_1)
-      if (data.q1FirstName) { setQ1FirstName(data.q1FirstName); hasAny = true; }
-      if (data.q1LastName) { setQ1LastName(data.q1LastName); hasAny = true; }
-      if (data.q1FirstNameEn) { setQ1FirstNameEn(data.q1FirstNameEn); hasAny = true; }
-      if (data.q1LastNameEn) { setQ1LastNameEn(data.q1LastNameEn); hasAny = true; }
+      // Unwrap candidate_details if provided inside rawData or if rawData is a Candidate record
+      let details: Record<string, any> = { ...rawData };
+      if (rawData.candidate_details) {
+        if (typeof rawData.candidate_details === "string") {
+          try {
+            details = { ...JSON.parse(rawData.candidate_details), ...details };
+          } catch {}
+        } else if (typeof rawData.candidate_details === "object") {
+          details = { ...rawData.candidate_details, ...details };
+        }
+      }
 
-      const birthDate = data.q1BirthDate || data.birth_date || data.birthDate;
+      // Personal details (doc_1)
+      const firstName = details.q1FirstName || details.first_name;
+      if (firstName) { setQ1FirstName(firstName); hasAny = true; }
+
+      const lastName = details.q1LastName || details.last_name;
+      if (lastName) { setQ1LastName(lastName); hasAny = true; }
+
+      const firstNameEn = details.q1FirstNameEn || details.first_name_en;
+      if (firstNameEn) { setQ1FirstNameEn(firstNameEn); hasAny = true; }
+
+      const lastNameEn = details.q1LastNameEn || details.last_name_en;
+      if (lastNameEn) { setQ1LastNameEn(lastNameEn); hasAny = true; }
+
+      const birthDate = details.q1BirthDate || details.birth_date || details.birthDate;
       if (birthDate) { setQ1BirthDate(birthDate); hasAny = true; }
 
-      const birthCountry = data.q1BirthCountry || data.birth_country || data.birthCountry;
+      const birthCountry = details.q1BirthCountry || details.birth_country || details.birthCountry;
       if (birthCountry) { setQ1BirthCountry(birthCountry); hasAny = true; }
 
-      const aliyahYear = data.q1AliyahYear || data.aliyah_year || data.aliyahYear;
+      const aliyahYear = details.q1AliyahYear || details.aliyah_year || details.aliyahYear;
       if (aliyahYear) { setQ1AliyahYear(aliyahYear); hasAny = true; }
 
-      const maritalStatus = data.q1MaritalStatus || data.marital_status || data.maritalStatus;
+      const maritalStatus = details.q1MaritalStatus || details.marital_status || details.maritalStatus;
       if (maritalStatus) { setQ1MaritalStatus(maritalStatus); hasAny = true; }
 
-      const otherCitizenship = data.q1OtherCitizenship || data.other_citizenship || data.otherCitizenship;
+      const otherCitizenship = details.q1OtherCitizenship || details.other_citizenship || details.otherCitizenship;
       if (otherCitizenship) { setQ1OtherCitizenship(otherCitizenship); hasAny = true; }
 
-      const fatherName = data.q1FatherName || data.q4FatherName || data.father_name || data.fatherName;
+      const fatherName = details.q1FatherName || details.q4FatherName || details.father_name || details.fatherName;
       if (fatherName) {
         setQ1FatherName(fatherName);
         setQ4FatherName(fatherName);
         hasAny = true;
       }
 
-      if (data.q1PrevLastName) { setQ1PrevLastName(data.q1PrevLastName); hasAny = true; }
+      if (details.q1PrevLastName || details.prev_last_name) {
+        setQ1PrevLastName(details.q1PrevLastName || details.prev_last_name);
+        hasAny = true;
+      }
 
-      const nameEn = data.q1NameEn || data.q9NameEn || data.name_en || data.nameEn;
+      const nameEn = details.q1NameEn || details.q9NameEn || details.name_en || details.nameEn;
       if (nameEn) {
         setQ1NameEn(nameEn);
         setQ9NameEn(nameEn);
         hasAny = true;
       }
 
-      if (data.q1Gender || data.gender) { setQ1Gender(data.q1Gender || data.gender); hasAny = true; }
-      if (data.q1Religion || data.religion) { setQ1Religion(data.q1Religion || data.religion); hasAny = true; }
+      if (details.q1Gender || details.gender) { setQ1Gender(details.q1Gender || details.gender); hasAny = true; }
+      if (details.q1Religion || details.religion) { setQ1Religion(details.q1Religion || details.religion); hasAny = true; }
 
-      const address = data.q1Address || data.q4Address || data.address;
+      const address = details.q1Address || details.q4Address || details.address;
       if (address) {
         setQ1Address(address);
         setQ4Address(address);
         hasAny = true;
       }
-      if (data.q1City) { setQ1City(data.q1City); hasAny = true; }
-      if (data.q1Street) { setQ1Street(data.q1Street); hasAny = true; }
-      if (data.q1HouseNumber) { setQ1HouseNumber(data.q1HouseNumber); hasAny = true; }
-      if (data.q1ZipCode) { setQ1ZipCode(data.q1ZipCode); hasAny = true; }
+      if (details.q1City || details.city) { setQ1City(details.q1City || details.city); hasAny = true; }
+      if (details.q1Street || details.street) { setQ1Street(details.q1Street || details.street); hasAny = true; }
+      if (details.q1HouseNumber || details.house_number) { setQ1HouseNumber(details.q1HouseNumber || details.house_number); hasAny = true; }
+      if (details.q1ZipCode || details.zip_code) { setQ1ZipCode(details.q1ZipCode || details.zip_code); hasAny = true; }
 
-      if (address && !data.q1City && !data.q1Street) {
+      if (address && !details.q1City && !details.city && !details.q1Street && !details.street) {
         const parts = String(address).split(",").map((p: string) => p.trim());
         if (parts.length >= 2) {
           setQ1City(parts[0]);
@@ -320,68 +342,68 @@ export default function DigitalFormView({
         }
       }
 
-      if (data.q1HomePhone) { setQ1HomePhone(formatIsraeliPhone(data.q1HomePhone)); hasAny = true; }
-      const mobile = data.q1MobilePhone || data.phone || data.mobilePhone;
+      if (details.q1HomePhone || details.home_phone) { setQ1HomePhone(formatIsraeliPhone(details.q1HomePhone || details.home_phone)); hasAny = true; }
+      const mobile = details.q1MobilePhone || details.phone || details.mobilePhone || details.mobile_phone;
       if (mobile) {
         setQ1MobilePhone(formatIsraeliPhone(mobile));
         hasAny = true;
       }
 
-      const armyService = data.q1ArmyService || data.army_service || data.armyService;
+      const armyService = details.q1ArmyService || details.army_service || details.armyService;
       if (armyService) { setQ1ArmyService(armyService); hasAny = true; }
 
-      const militaryId = data.q1MilitaryId || data.military_id || data.militaryId;
+      const militaryId = details.q1MilitaryId || details.military_id || details.militaryId;
       if (militaryId) { setQ1MilitaryId(militaryId); hasAny = true; }
 
-      const militaryRole = data.q1MilitaryRole || data.military_role || data.militaryRole;
+      const militaryRole = details.q1MilitaryRole || details.military_role || details.militaryRole;
       if (militaryRole) { setQ1MilitaryRole(militaryRole); hasAny = true; }
 
-      const militaryYears = data.q1MilitaryYears || data.military_years || data.militaryYears;
+      const militaryYears = details.q1MilitaryYears || details.military_years || details.militaryYears;
       if (militaryYears) { setQ1MilitaryYears(militaryYears); hasAny = true; }
 
-      const exemptionReason = data.q1ExemptionReason || data.exemption_reason || data.exemptionReason;
+      const exemptionReason = details.q1ExemptionReason || details.exemption_reason || details.exemptionReason;
       if (exemptionReason) { setQ1ExemptionReason(exemptionReason); hasAny = true; }
 
-      const educationHigh = data.q1EducationHigh || data.education_high || data.educationHigh;
+      const educationHigh = details.q1EducationHigh || details.education_high || details.educationHigh;
       if (educationHigh) { setQ1EducationHigh(educationHigh); hasAny = true; }
 
-      const educationAcademic = data.q1EducationAcademic || data.education_academic || data.educationAcademic;
+      const educationAcademic = details.q1EducationAcademic || details.education_academic || details.educationAcademic;
       if (educationAcademic) { setQ1EducationAcademic(educationAcademic); hasAny = true; }
 
-      const workplace1 = data.q1Workplace1 || data.workplace1;
+      const workplace1 = details.q1Workplace1 || details.workplace1;
       if (workplace1) { setQ1Workplace1(workplace1); hasAny = true; }
 
-      const workplace2 = data.q1Workplace2 || data.workplace2;
+      const workplace2 = details.q1Workplace2 || details.workplace2;
       if (workplace2) { setQ1Workplace2(workplace2); hasAny = true; }
 
-      const ref1 = data.q1Ref1 || data.ref1;
+      const ref1 = details.q1Ref1 || details.ref1;
       if (ref1) { setQ1Ref1(ref1); hasAny = true; }
 
-      const ref2 = data.q1Ref2 || data.ref2;
+      const ref2 = details.q1Ref2 || details.ref2;
       if (ref2) { setQ1Ref2(ref2); hasAny = true; }
 
-      const doc4Father = data.q4FatherName || data.father_name || data.fatherName;
+      const doc4Father = details.q4FatherName || details.father_name || details.fatherName;
       if (doc4Father) { setQ4FatherName(doc4Father); hasAny = true; }
 
-      const doc9NameEn = data.q9NameEn || data.name_en || data.nameEn;
+      const doc9NameEn = details.q9NameEn || details.name_en || details.nameEn;
       if (doc9NameEn) { setQ9NameEn(doc9NameEn); hasAny = true; }
 
-      const roleInProject = data.q9RoleInProject || data.role_in_project || data.roleInProject || data.job_title;
+      const roleInProject = details.q9RoleInProject || details.role_in_project || details.roleInProject || details.job_title;
       if (roleInProject) { setQ9RoleInProject(roleInProject); hasAny = true; }
 
-      const managerName = data.q9ManagerName || data.manager_name || data.managerName;
+      const managerName = details.q9ManagerName || details.manager_name || details.managerName;
       if (managerName) { setQ9ManagerName(managerName); hasAny = true; }
 
-      const startDate = data.q9StartDate || data.start_date || data.startDate;
+      const startDate = details.q9StartDate || details.start_date || details.startDate;
       if (startDate) { setQ9StartDate(startDate); hasAny = true; }
 
-      const previousGov = data.q9PreviousGov || data.previous_gov || data.previousGov;
+      const previousGov = details.q9PreviousGov || details.previous_gov || details.previousGov;
       if (previousGov) { setQ9PreviousGov(previousGov); hasAny = true; }
 
-      const previousDates = data.q9PreviousDates || data.previous_dates || data.previousDates;
+      const previousDates = details.q9PreviousDates || details.previous_dates || details.previousDates;
       if (previousDates) { setQ9PreviousDates(previousDates); hasAny = true; }
 
-      const signature = data.signatureDataUrl || data.signature_data_url || data.signature_url || data.signatureUrl;
+      const signature = details.signatureDataUrl || details.signature_data_url || details.signature_url || details.signatureUrl;
       if (signature) { setSignatureDataUrl(signature); hasAny = true; }
 
       if (hasAny) {
@@ -476,6 +498,86 @@ export default function DigitalFormView({
         return;
       }
     }
+
+    const currentAnswers = {
+      q1FirstName,
+      q1LastName,
+      q1FirstNameEn,
+      q1LastNameEn,
+      q1BirthDate,
+      q1BirthCountry,
+      q1AliyahYear,
+      q1MaritalStatus,
+      q1OtherCitizenship,
+      q1FatherName,
+      q1PrevLastName,
+      q1NameEn,
+      q1Gender,
+      q1Religion,
+      q1Address: q1Address || `${q1City}, ${q1Street} ${q1HouseNumber}`.trim(),
+      q1City,
+      q1Street,
+      q1HouseNumber,
+      q1ZipCode,
+      q1HomePhone: formatIsraeliPhone(q1HomePhone),
+      q1MobilePhone: formatIsraeliPhone(q1MobilePhone || candidate.phone),
+      q1ArmyService,
+      q1MilitaryId,
+      q1MilitaryRole,
+      q1MilitaryYears,
+      q1ExemptionReason,
+      q1EducationHigh,
+      q1EducationAcademic,
+      q1Workplace1,
+      q1Workplace2,
+      q1Ref1,
+      q1Ref2,
+      q4FatherName: q4FatherName || q1FatherName,
+      q4Address: q4Address || q1Address || `${q1City}, ${q1Street} ${q1HouseNumber}`.trim(),
+      q9NameEn: q9NameEn || q1NameEn,
+      q9RoleInProject,
+      q9ManagerName,
+      q9StartDate,
+      q9PreviousGov,
+      q9PreviousDates,
+      signatureDataUrl,
+    };
+
+    // Save immediately to local storage
+    try {
+      localStorage.setItem(
+        `form_data_${candidate.candidate_id}_${docTypeId}`,
+        JSON.stringify(currentAnswers)
+      );
+      const existingCommonStr = localStorage.getItem(`form_data_${candidate.candidate_id}_common`);
+      const existingCommon = existingCommonStr ? JSON.parse(existingCommonStr) : {};
+      const nonEmptyAnswers: Record<string, any> = {};
+      for (const [k, v] of Object.entries(currentAnswers)) {
+        if (v !== undefined && v !== null && v !== "") {
+          nonEmptyAnswers[k] = v;
+        }
+      }
+      localStorage.setItem(
+        `form_data_${candidate.candidate_id}_common`,
+        JSON.stringify({ ...existingCommon, ...nonEmptyAnswers })
+      );
+    } catch {
+      // Ignore localStorage errors
+    }
+
+    // Background sync to server profile
+    fetch("/api/documents/form-data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        candidate_id: candidate.candidate_id,
+        doc_type_id: docTypeId,
+        form_data: currentAnswers,
+        token: token || undefined,
+      }),
+    }).catch(() => {
+      // Non-blocking sync
+    });
 
     setIsPreviewMode(true);
     if (typeof window !== "undefined") {

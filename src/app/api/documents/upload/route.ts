@@ -299,7 +299,17 @@ export async function POST(request: Request) {
       form_data: rawFormData || undefined,
     });
 
-    // 8. Append Event to Audit Log
+    // 8. Sync and save form answers directly into Candidate profile details
+    if (rawFormData) {
+      try {
+        const formObj = JSON.parse(rawFormData);
+        await sheetsRepository.updateCandidateProfileData(candidateId, formObj);
+      } catch (err) {
+        console.warn("Could not sync form data into candidate profile:", err);
+      }
+    }
+
+    // 9. Append Event to Audit Log
     const now = new Date().toISOString();
     const auditEntry: AuditLogEntry = {
       log_id: `log_${Date.now()}`,

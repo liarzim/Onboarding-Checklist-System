@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import CandidatePortalLink from "@/components/common/CandidatePortalLink";
+import CandidateFilledDetailsCard from "@/components/candidate/CandidateFilledDetailsCard";
 
 interface CandidateInfo {
   candidate_id: string;
@@ -33,6 +34,7 @@ interface CandidateInfo {
   drive_folder_id: string;
   current_stage_id: string;
   is_completed: boolean;
+  candidate_details?: any;
 }
 
 interface ChecklistItemDetail {
@@ -322,6 +324,12 @@ export default function CandidateChecklistPage() {
         candidateName={candidate.full_name}
         candidatePhone={candidate.phone}
         variant="card"
+      />
+
+      {/* Candidate Profile Details Filled in Forms */}
+      <CandidateFilledDetailsCard
+        candidateDetails={candidate.candidate_details}
+        candidateName={candidate.full_name}
       />
 
       {/* Global Upload Notification Toast */}

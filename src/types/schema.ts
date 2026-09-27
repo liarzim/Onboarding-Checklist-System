@@ -17,6 +17,7 @@ export const CandidateSchema = z.object({
   signature_url: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
+  candidate_details: z.record(z.any()).or(z.string()).nullable().optional(),
 });
 
 export type Candidate = z.infer<typeof CandidateSchema>;
