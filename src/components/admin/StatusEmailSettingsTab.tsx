@@ -329,6 +329,7 @@ export default function StatusEmailSettingsTab({
                 { tag: "{שם_ספק}", label: "ספק" },
                 { tag: "{תאריך_סיום}", label: "תאריך סיום" },
                 { tag: "{מספר_טפסים}", label: "מספר טפסים" },
+                { tag: "{קישור_דרייב}", label: "קישור לתיקיית דרייב" },
               ].map((item) => (
                 <button
                   key={item.tag}

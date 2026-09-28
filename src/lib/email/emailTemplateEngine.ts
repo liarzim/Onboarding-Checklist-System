@@ -7,6 +7,7 @@ export interface CandidateEmailVariables {
   vendor_name: string;
   completion_date?: string;
   forms_count?: number;
+  drive_url?: string;
 }
 
 /**
@@ -37,6 +38,8 @@ export function interpolateEmailTemplate(
     "{תאריך_סיום}": defaultDateStr,
     "{תאריך}": defaultDateStr,
     "{מספר_טפסים}": countStr,
+    "{קישור_דרייב}": vars.drive_url || "",
+    "{קישור_תיקייה}": vars.drive_url || "",
 
     // English placeholders
     "{candidate_name}": vars.candidate_name || "",
@@ -45,6 +48,7 @@ export function interpolateEmailTemplate(
     "{vendor_name}": vars.vendor_name || "",
     "{completion_date}": defaultDateStr,
     "{forms_count}": countStr,
+    "{drive_url}": vars.drive_url || "",
   };
 
   let result = templateText;

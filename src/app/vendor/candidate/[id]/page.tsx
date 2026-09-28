@@ -76,12 +76,12 @@ export default function CandidateChecklistPage() {
     message: string;
     recipientEmail?: string;
     mailtoUrl?: string;
+    subject?: string;
   } | null>(null);
 
-  async function handleSendCompletedEmail() {
+  async function handleSendCompletedEmail(e?: React.MouseEvent) {
     try {
       setIsSendingEmail(true);
-      setEmailResult(null);
       const res = await fetch(`/api/candidates/${candidateId}/send-completed-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -90,25 +90,36 @@ export default function CandidateChecklistPage() {
         })
       });
       const data = await res.json();
+      const mailto = data.mailtoUrl || data.mailtoLink || data.data?.mailtoLink || data.data?.mailtoUrl;
+      const recipient = data.recipientEmail || data.recipient || data.data?.recipient || "";
+
       if (res.ok && data.success) {
         setEmailResult({
           success: true,
-          message: data.message || "הטפסים נשלחו בהצלחה במייל לאחראי התהליך!",
-          recipientEmail: data.recipientEmail,
-          mailtoUrl: data.mailtoUrl
+          message: "הודעת המייל הוכנה ונפתחה בתוכנת הדואר שלך!",
+          recipientEmail: recipient,
+          mailtoUrl: mailto,
+          subject: data.subject,
         });
+
+        if (mailto && (!e || (e.currentTarget && (e.currentTarget as any).tagName !== "A"))) {
+          window.location.href = mailto;
+        }
       } else {
-        setEmailResult({
+        setEmailResult((prev) => ({
           success: false,
-          message: data.error || data.message || "שגיאה בשליחת המייל",
-          mailtoUrl: data.mailtoUrl
-        });
+          message: data.error || data.message || "שגיאה בפתיחת המייל",
+          mailtoUrl: prev?.mailtoUrl || mailto,
+          recipientEmail: prev?.recipientEmail || recipient,
+        }));
       }
     } catch (err: any) {
-      setEmailResult({
+      setEmailResult((prev) => ({
         success: false,
-        message: err.message || "שגיאת רשת בעת שליחת המייל"
-      });
+        message: err.message || "שגיאת תקשורת בפתיחת המייל",
+        mailtoUrl: prev?.mailtoUrl,
+        recipientEmail: prev?.recipientEmail,
+      }));
     } finally {
       setIsSendingEmail(false);
     }
@@ -128,6 +139,35 @@ export default function CandidateChecklistPage() {
       const data = await res.json();
       setCandidate(data.candidate);
       setItems(data.items || []);
+
+      if (data.items && data.items.length > 0) {
+        const upCount = data.items.filter(
+          (i: any) =>
+            i.status === "Uploaded" ||
+            i.status === "uploaded" ||
+            i.status === "approved" ||
+            i.status === "Approved"
+        ).length;
+        if (upCount >= data.items.length) {
+          fetch(`/api/candidates/${candidateId}/send-completed-email`)
+            .then((r) => r.json())
+            .then((mailData) => {
+              if (mailData.success) {
+                setEmailResult((prev) => {
+                  if (prev?.success) return prev;
+                  return {
+                    success: false,
+                    message: "",
+                    recipientEmail: mailData.recipientEmail || mailData.recipient,
+                    mailtoUrl: mailData.mailtoUrl || mailData.mailtoLink,
+                    subject: mailData.subject,
+                  };
+                });
+              }
+            })
+            .catch(() => {});
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "שגיאה בטעינת הנתונים");
     } finally {
@@ -381,64 +421,89 @@ export default function CandidateChecklistPage() {
       {/* Forms Completion Email Dispatch Card */}
       {uploadedCount === totalCount && (
         <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-6 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+            <div className="space-y-1.5 flex-1">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                <h3 className="font-bold text-slate-900">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                <h3 className="font-bold text-slate-900 text-base">
                   כל הטפסים ומסמכי החובה הושלמו!
                 </h3>
               </div>
-              <p className="text-sm text-slate-600">
-                ניתן לשלוח כעת את כל הטפסים החתומים (כקבצי PDF מצורפים) לאחראי על התהליך לפי הגדרות המערכת.
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                טפסי הקליטה החתומים מוכנים לשליחה לאחראי על התהליך לפי הגדרות המערכת.
+                לחיצה על הכפתור תפתח ישירות את אפליקציית הדואר שלך (Outlook / Gmail) עם הודעה מוכנה לשליחה.
               </p>
-              {emailResult && (
+
+              {emailResult?.message && (
                 <div
-                  className={`mt-2 p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
+                  className={`mt-2 p-3 rounded-xl text-xs font-medium flex items-start gap-2 ${
                     emailResult.success
-                      ? "bg-emerald-100 text-emerald-800"
-                      : "bg-rose-100 text-rose-800"
+                      ? "bg-emerald-100/90 text-emerald-900 border border-emerald-300"
+                      : "bg-amber-100/90 text-amber-900 border border-amber-300"
                   }`}
                 >
                   {emailResult.success ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                   ) : (
-                    <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   )}
-                  <span>{emailResult.message}</span>
+                  <div className="space-y-0.5">
+                    <span className="font-bold">{emailResult.message}</span>
+                    {emailResult.recipientEmail && (
+                      <div className="text-[11px] text-slate-700">
+                        נמען מוגדר: <span dir="ltr" className="font-mono font-semibold">{emailResult.recipientEmail}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="flex items-center gap-3 flex-wrap">
-              <button
-                type="button"
-                onClick={handleSendCompletedEmail}
-                disabled={isSendingEmail}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium rounded-xl text-xs transition flex items-center gap-2 shadow-sm"
-              >
-                {isSendingEmail ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>שולח טפסים במייל...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    <span>{emailResult?.success ? "שלח שוב במייל לאחראי" : "שלח טפסים במייל לאחראי"}</span>
-                  </>
-                )}
-              </button>
-
-              {emailResult?.mailtoUrl && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
+              {emailResult?.mailtoUrl ? (
                 <a
                   href={emailResult.mailtoUrl}
+                  onClick={(e) => handleSendCompletedEmail(e)}
+                  className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>
+                    {emailResult.success
+                      ? "פתח שוב באפליקציית הדואר"
+                      : "פתח והוצא מייל באפליקציית הדואר"}
+                  </span>
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleSendCompletedEmail()}
+                  disabled={isSendingEmail}
+                  className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md"
+                >
+                  {isSendingEmail ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>פותח את אפליקציית הדואר...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-4 h-4" />
+                      <span>פתח והוצא מייל באפליקציית הדואר</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {candidate.drive_folder_id && !candidate.drive_folder_id.startsWith("test_drive_folder_") && (
+                <a
+                  href={`https://drive.google.com/drive/folders/${candidate.drive_folder_id}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium rounded-xl text-xs transition flex items-center gap-2 shadow-sm"
+                  className="px-4 py-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-xs"
                 >
-                  <Mail className="w-4 h-4 text-blue-600" />
-                  <span>פתח בדואר ברירת המחדל שלי</span>
+                  <Folder className="w-4 h-4 text-amber-600" />
+                  <span>תיקיית Drive</span>
+                  <ExternalLink className="w-3 h-3 text-slate-400" />
                 </a>
               )}
             </div>

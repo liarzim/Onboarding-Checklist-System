@@ -280,8 +280,6 @@ export default function CandidatePortalClient({
             <div className="pt-1">
               <a
                 href={emailDispatchResult.mailtoLink}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-blue-300 text-blue-700 hover:bg-blue-100 text-xs font-bold transition shadow-xs"
               >
                 <Mail className="w-3.5 h-3.5 text-blue-600" />
@@ -299,8 +297,6 @@ export default function CandidatePortalClient({
           {emailDispatchResult?.mailtoLink && (
             <a
               href={emailDispatchResult.mailtoLink}
-              target="_blank"
-              rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition"
             >
               <Mail className="w-4 h-4" />

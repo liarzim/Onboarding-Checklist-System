@@ -62,16 +62,25 @@ export async function sendStatusNotificationEmail({
   );
 
   // 4. Interpolate variables into subject and body
+  const driveUrl = candidate.drive_folder_id && !candidate.drive_folder_id.startsWith("test_drive_folder_")
+    ? `https://drive.google.com/drive/folders/${candidate.drive_folder_id}`
+    : "";
+
   const vars = {
     candidate_name: candidate.full_name,
     id_number: candidate.id_number,
     project_name: candidate.project_id,
     vendor_name: (candidate as any).vendor_company_name || candidate.vendor_id || "ספק קליטה",
     forms_count: uploadedItems.length || 11,
+    drive_url: driveUrl,
   };
 
   const subject = interpolateEmailTemplate(template.subject, vars);
-  const body = interpolateEmailTemplate(template.body, vars);
+  let body = interpolateEmailTemplate(template.body, vars);
+
+  if (template.attach_pdfs && driveUrl && !body.includes(driveUrl)) {
+    body += `\n\nקישור ישיר לתיקיית המסמכים ב-Google Drive:\n${driveUrl}`;
+  }
 
   // 5. Gather PDF attachment details
   const attachmentNames: string[] = [];
