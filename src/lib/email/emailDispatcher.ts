@@ -66,6 +66,11 @@ export async function sendStatusNotificationEmail({
     ? `https://drive.google.com/drive/folders/${candidate.drive_folder_id}`
     : "";
 
+  const docTypes = await sheetsRepository.getDocumentTypes();
+  const formsList = docTypes
+    .map((doc, idx) => `${idx + 1}. ${doc.doc_name}`)
+    .join("\n");
+
   const vars = {
     candidate_name: candidate.full_name,
     id_number: candidate.id_number,
@@ -73,6 +78,7 @@ export async function sendStatusNotificationEmail({
     vendor_name: (candidate as any).vendor_company_name || candidate.vendor_id || "ספק קליטה",
     forms_count: uploadedItems.length || 11,
     drive_url: driveUrl,
+    forms_list: formsList,
   };
 
   const subject = interpolateEmailTemplate(template.subject, vars);

@@ -138,6 +138,7 @@ export default function StatusEmailSettingsTab({
     vendor_name: 'מטריקס טכנולוגיות בע"מ',
     completion_date: "27/09/2026 15:30",
     forms_count: 11,
+    drive_url: "https://drive.google.com/drive/folders/sample_folder_id",
   };
 
   const previewSubject = interpolateEmailTemplate(currentTemplate.subject, sampleVars);
@@ -329,6 +330,7 @@ export default function StatusEmailSettingsTab({
                 { tag: "{שם_ספק}", label: "ספק" },
                 { tag: "{תאריך_סיום}", label: "תאריך סיום" },
                 { tag: "{מספר_טפסים}", label: "מספר טפסים" },
+                { tag: "{רשימת_טפסים}", label: "רשימת 11 הטפסים" },
                 { tag: "{קישור_דרייב}", label: "קישור לתיקיית דרייב" },
               ].map((item) => (
                 <button

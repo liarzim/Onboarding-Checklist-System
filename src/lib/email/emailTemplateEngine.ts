@@ -8,7 +8,20 @@ export interface CandidateEmailVariables {
   completion_date?: string;
   forms_count?: number;
   drive_url?: string;
+  forms_list?: string;
 }
+
+export const DEFAULT_FORMS_LIST_STR = `1. שאלון אישי רמה 5
+2. עלון מידע לנבדק
+3. הצהרה על קבלת כרטיס חכם
+4. הסכמה למסירת מידע פלילי
+5. התחייבות לשמירת סודיות
+6. התחייבות לשמירת פרטיות
+7. הימנעות מעבירות מחשב
+8. הסכמה לניטור סייבר
+9. בקשה להנפקת כרטיס חכם
+10. צילום תעודת זהות וספח
+11. תמונת פספורט רשמית`;
 
 /**
  * Replaces placeholders in subject and body text with actual candidate values.
@@ -23,6 +36,7 @@ export function interpolateEmailTemplate(
   const now = new Date();
   const defaultDateStr = vars.completion_date || `${now.toLocaleDateString("he-IL")} ${now.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`;
   const countStr = String(vars.forms_count ?? 11);
+  const formsListStr = vars.forms_list || DEFAULT_FORMS_LIST_STR;
 
   const replacements: Record<string, string> = {
     // Hebrew placeholders
@@ -40,6 +54,9 @@ export function interpolateEmailTemplate(
     "{מספר_טפסים}": countStr,
     "{קישור_דרייב}": vars.drive_url || "",
     "{קישור_תיקייה}": vars.drive_url || "",
+    "{רשימת_טפסים}": formsListStr,
+    "{רשימת_הטפסים}": formsListStr,
+    "{רשימת_מסמכים}": formsListStr,
 
     // English placeholders
     "{candidate_name}": vars.candidate_name || "",
@@ -49,6 +66,7 @@ export function interpolateEmailTemplate(
     "{completion_date}": defaultDateStr,
     "{forms_count}": countStr,
     "{drive_url}": vars.drive_url || "",
+    "{forms_list}": formsListStr,
   };
 
   let result = templateText;

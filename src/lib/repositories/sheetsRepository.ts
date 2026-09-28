@@ -21,6 +21,7 @@ import {
   DEFAULT_STATUS_EMAIL_TEMPLATES,
   type StatusEmailTemplate,
 } from "@/types/emailTemplates";
+import { DEFAULT_FORMS_LIST_STR } from "../email/emailTemplateEngine";
 import { sanitizeSheetCellValue } from "../security";
 
 export const SHEET_NAMES = {
@@ -2059,6 +2060,13 @@ export class SheetsRepository {
       if (settings["status_email_templates_json"]) {
         const parsed = JSON.parse(settings["status_email_templates_json"]);
         if (parsed && typeof parsed === "object") {
+          // If stage_1 contains the old compressed list with 'הצהרות סודיות, פרטיות ואבטחת מידע', upgrade it to the full 11 items
+          if (parsed.stage_1?.body && parsed.stage_1.body.includes("הצהרות סודיות, פרטיות ואבטחת מידע")) {
+            parsed.stage_1.body = parsed.stage_1.body.replace(
+              /- שאלון אישי רמה 5[\s\S]*?- תמונת פספורט רשמית/m,
+              DEFAULT_FORMS_LIST_STR
+            );
+          }
           return { ...DEFAULT_STATUS_EMAIL_TEMPLATES, ...parsed };
         }
       }
