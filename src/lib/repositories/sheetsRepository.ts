@@ -75,8 +75,19 @@ export interface ICandidatesFilter {
 
 export class SheetsRepository {
   private headersVerified = false;
+  public lastFetchStatus: {
+    connected: boolean;
+    error: string | null;
+    spreadsheetId: string;
+    rowCount: number;
+  } = {
+    connected: false,
+    error: null,
+    spreadsheetId: "",
+    rowCount: 0,
+  };
 
-  private getSpreadsheetId(): string {
+  public getSpreadsheetId(): string {
     return getEnv().GOOGLE_SPREADSHEET_ID;
   }
 
@@ -299,7 +310,10 @@ export class SheetsRepository {
             vendor_id: String(row[5] || ""),
             project_id: String(row[6] || ""),
             drive_folder_id: String(row[7] || ""),
-            current_stage_id: String(row[8] || "stage_1"),
+            current_stage_id:
+              String(row[8] || "stage_1") === "stage_initial"
+                ? "stage_1"
+                : String(row[8] || "stage_1"),
             is_completed: String(row[9] ?? "").toUpperCase() === "TRUE",
             created_at: String(row[10] || new Date().toISOString()),
             updated_at: String(row[11] || new Date().toISOString()),
@@ -313,8 +327,21 @@ export class SheetsRepository {
         .filter((c) => c.candidate_id && c.candidate_id.trim().length > 0);
 
       isSheetsConnected = true;
-    } catch {
-      // Ignore Google Sheets fetch error and merge with testStore
+      this.lastFetchStatus = {
+        connected: true,
+        error: null,
+        spreadsheetId: this.getSpreadsheetId() || "",
+        rowCount: sheetCandidates.length,
+      };
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      console.error("[sheetsRepository] Failed to fetch candidates from Google Sheets:", errMsg);
+      this.lastFetchStatus = {
+        connected: false,
+        error: errMsg,
+        spreadsheetId: this.getSpreadsheetId() || "לא מוגדר",
+        rowCount: 0,
+      };
     }
 
     // When Google Sheets is connected: Google Sheets is the single source of truth!

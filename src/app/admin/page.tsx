@@ -69,6 +69,12 @@ export default function AdminDashboardPage() {
   const [stages, setStages] = useState<StageOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [googleStatus, setGoogleStatus] = useState<{
+    connected: boolean;
+    error: string | null;
+    spreadsheetId: string;
+    rowCount: number;
+  } | null>(null);
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
@@ -210,6 +216,10 @@ export default function AdminDashboardPage() {
 
       const candidatesData = await candidatesRes.json();
       const metaData = await metaRes.json();
+
+      if (candidatesData.googleStatus) {
+        setGoogleStatus(candidatesData.googleStatus);
+      }
 
       let fetchedCandidates = candidatesData.candidates || [];
       if (typeof window !== "undefined") {
@@ -366,6 +376,58 @@ export default function AdminDashboardPage() {
           </button>
         </div>
       </div>
+
+      {/* Google Sheets Connection Diagnosis Alert */}
+      {googleStatus && !googleStatus.connected && (
+        <div className="p-4 bg-amber-50/95 border-2 border-amber-300 rounded-2xl text-amber-900 space-y-2.5 shadow-xs">
+          <div className="flex items-center gap-2 font-bold text-sm text-amber-950">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+            <span>שים לב: חיבור Google Sheets אינו פעיל בסביבה זו (המערכת פועלת במצב מקומי)</span>
+          </div>
+          <div className="text-xs text-amber-850 space-y-1.5 pr-7">
+            <p>
+              <strong>מזהה גיליון (Spreadsheet ID):</strong>{" "}
+              <code className="font-mono bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200">
+                {googleStatus.spreadsheetId || "טרם הוגדר"}
+              </code>
+            </p>
+            {googleStatus.error && (
+              <p className="font-mono text-[11px] bg-amber-100/90 p-2 rounded-lg border border-amber-200 text-amber-950 break-all">
+                שגיאה מהשרת: {googleStatus.error}
+              </p>
+            )}
+            <p className="text-amber-800">
+              מועמדים השמורים ב-Google Sheets (כגון מיכאל ליארזי) לא יוצגו כאן עד להשלמת החיבור וההרשאות.
+            </p>
+            <div className="pt-1">
+              <Link
+                href="/admin/settings?tab=google"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-xs"
+              >
+                <span>עבור להגדרות חיבור Google Sheets</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {googleStatus && googleStatus.connected && candidates.length === 0 && (
+        <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>
+              מחובר בהצלחה ל-Google Sheets (מזהה: <code className="font-mono bg-blue-100 px-1 py-0.5 rounded text-[11px]">{googleStatus.spreadsheetId.slice(0, 16)}...</code>), אך לא נמצאו מועמדים פעילים בגיליון.
+            </span>
+          </div>
+          <Link
+            href="/admin/settings?tab=google"
+            className="text-blue-700 underline font-semibold hover:text-blue-900 shrink-0"
+          >
+            בדוק את הגיליון המחובר
+          </Link>
+        </div>
+      )}
 
       {/* KPI Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -102,6 +102,7 @@ export async function GET(request: Request) {
         total: candidatesWithDetails.length,
         status,
       },
+      googleStatus: sheetsRepository.lastFetchStatus,
     });
 
     // Clean up stale demo_candidates cookie from browser
