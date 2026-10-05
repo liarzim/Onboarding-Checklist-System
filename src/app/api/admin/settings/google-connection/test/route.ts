@@ -118,6 +118,8 @@ export async function POST(request: Request) {
           result.sheetsDetails = isOauth
             ? `חוסר הרשאות בגיליון עבור חשבון ${dynamicConfig.oauth_email || "המחובר"}. יש לוודא שהוענקה הרשאת עריכה.`
             : `חוסר הרשאות בגיליון: יש לשתף את כתובת ${serviceAccountEmail} בהרשאת עורך (Editor).`;
+        } else if (msg.includes("invalid_grant")) {
+          result.sheetsDetails = "מפתח ה-OAuth (טוקן) פג תוקף (invalid_grant). באפליקציות Google במצב Testing, גוגל מגבילה את תוקף הטוקן ל-7 ימים. יש ללחוץ על 'נתק חשבון Google' כדי לעבור ל-Service Account שאינו פג תוקף לעולם, או לחבר מחדש.";
         } else {
           result.sheetsDetails = `שגיאה בגישה לגיליון: ${msg}`;
         }
@@ -163,6 +165,8 @@ export async function POST(request: Request) {
           result.driveDetails = isOauth
             ? `חוסר הרשאות בדרייב: ודא שלחשבון ${dynamicConfig.oauth_email || "המחובר"} יש הרשאת עריכה בתיקייה זו.`
             : `חוסר הרשאות בדרייב: יש לשתף את כתובת ${serviceAccountEmail} בהרשאת עורך (Editor) בתיקייה.`;
+        } else if (msg.includes("invalid_grant")) {
+          result.driveDetails = "מפתח ה-OAuth (טוקן) פג תוקף (invalid_grant). באפליקציות Google במצב Testing, גוגל מגבילה את תוקף הטוקן ל-7 ימים. יש ללחוץ על 'נתק חשבון Google' כדי לעבור ל-Service Account שאינו פג תוקף לעולם, או לחבר מחדש.";
         } else {
           result.driveDetails = `שגיאה בגישה לדרייב: ${msg}`;
         }

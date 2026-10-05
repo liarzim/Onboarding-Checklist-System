@@ -1,4 +1,10 @@
-import { getSheetsClient, resetGoogleClients } from "../google";
+import {
+  getSheetsClient,
+  resetGoogleClients,
+  markOAuthRevoked,
+  isOAuthMarkedRevoked,
+  hasServiceAccountCredentials,
+} from "../google";
 import { getEnv, isProduction } from "../env";
 import { loadTestStore, saveTestStore, recordDeletedCandidate } from "../testStore";
 import { saveDynamicGoogleConfig } from "../dynamicConfig";
@@ -335,6 +341,11 @@ export class SheetsRepository {
       };
     } catch (err: any) {
       const errMsg = err?.message || String(err);
+      if (errMsg.includes("invalid_grant") && hasServiceAccountCredentials() && !isOAuthMarkedRevoked()) {
+        console.warn("[sheetsRepository] OAuth token expired (invalid_grant). Retrying with Service Account...");
+        markOAuthRevoked();
+        return this.getCandidates(filter);
+      }
       console.error("[sheetsRepository] Failed to fetch candidates from Google Sheets:", errMsg);
       this.lastFetchStatus = {
         connected: false,

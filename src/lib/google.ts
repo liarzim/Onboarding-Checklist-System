@@ -10,6 +10,28 @@ const GOOGLE_SCOPES = [
 let authClient: any = null;
 let sheetsInstance: sheets_v4.Sheets | null = null;
 let driveInstance: drive_v3.Drive | null = null;
+let isOauthRevoked = false;
+
+export function markOAuthRevoked(): void {
+  isOauthRevoked = true;
+  resetGoogleClients();
+}
+
+export function isOAuthMarkedRevoked(): boolean {
+  return isOauthRevoked;
+}
+
+export function hasServiceAccountCredentials(): boolean {
+  try {
+    const dynamicConfig = getDynamicGoogleConfig();
+    const env = getEnv();
+    const key = dynamicConfig.service_account_private_key || env.GOOGLE_PRIVATE_KEY;
+    const email = dynamicConfig.service_account_email || env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    return Boolean(email && email.includes("@") && key && key.length > 50);
+  } catch {
+    return false;
+  }
+}
 
 export function getGoogleAuth(): any {
   if (!authClient) {
@@ -20,9 +42,8 @@ export function getGoogleAuth(): any {
       (env.GOOGLE_REFRESH_TOKEN || "").trim() ||
       (dynamicConfig.oauth_refresh_token || "").trim();
 
-    // 1. If OAuth refresh token is available (from env or dynamic config), use it permanently!
-    // This provides full personal Google Drive storage quota (15GB+) and never hits Service Account quota limits.
-    if (refreshToken && refreshToken.length > 5) {
+    // 1. If OAuth refresh token is available and not marked as revoked/expired, use it!
+    if (!isOauthRevoked && refreshToken && refreshToken.length > 5) {
       const { clientId, clientSecret } = getOAuth2Credentials();
       const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
       oauth2Client.setCredentials({
@@ -32,10 +53,10 @@ export function getGoogleAuth(): any {
       return authClient;
     }
 
-    // Default: Service Account JWT
+    // Default or Fallback: Service Account JWT
     authClient = new google.auth.JWT({
-      email: env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      key: env.GOOGLE_PRIVATE_KEY,
+      email: dynamicConfig.service_account_email || env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      key: dynamicConfig.service_account_private_key || env.GOOGLE_PRIVATE_KEY,
       scopes: GOOGLE_SCOPES,
     });
   }
